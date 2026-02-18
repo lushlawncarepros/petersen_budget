@@ -10,37 +10,44 @@ st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="cente
 # CSS for Forced Horizontal Rows & Mobile Polish
 st.markdown("""
     <style>
-    /* Force rows to stay horizontal on mobile using Grid */
-    .history-row {
-        display: grid;
-        grid-template-columns: 18% 47% 20% 15%;
-        align-items: center;
-        padding: 10px 0;
-        border-bottom: 1px solid #f0f2f6;
-        font-size: 0.85rem;
+    /* CRITICAL: Force columns to stay horizontal on mobile */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        gap: 0.3rem !important;
     }
-    .h-date { color: #888; font-size: 0.75rem; }
-    .h-cat { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-right: 5px; }
-    .h-amt { text-align: right; font-weight: bold; }
-    .h-edit { text-align: right; }
-
-    /* Button Styling */
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; }
-    .edit-btn-small button { 
-        height: 2.2em !important; 
-        padding: 0 5px !important; 
+    [data-testid="column"] {
+        min-width: 0px !important;
+        flex: 1 1 auto !important;
+    }
+    
+    /* Global Button Style */
+    .stButton>button { width: 100%; border-radius: 10px; height: 2.8em; }
+    
+    /* Compact History Row Styling */
+    .history-text {
         font-size: 0.75rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+    }
+    
+    /* Sidebar Hide */
+    div[data-testid="stSidebarNav"] { display: none; }
+    
+    /* Action Button Styling */
+    .edit-btn-mini button { 
+        height: 2em !important; 
+        padding: 0 4px !important; 
+        font-size: 0.7rem !important;
         background-color: #f0f2f6 !important;
         border: 1px solid #dcdfe3 !important;
     }
-    
-    /* Dialog Styling */
+
+    /* Dialog/Pop-up Styling */
     div[data-testid="stDialog"] { border-radius: 20px; }
     .delete-btn button { background-color: #ff4b4b !important; color: white !important; }
     .update-btn button { background-color: #28a745 !important; color: white !important; }
-    
-    /* Hide Default Nav */
-    div[data-testid="stSidebarNav"] { display: none; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -59,7 +66,7 @@ def login_screen():
     st.title("🔐 Petersen Budget")
     u = st.text_input("Username").lower()
     p = st.text_input("Password", type="password")
-    rem = st.checkbox("Remember me on this device", value=True)
+    rem = st.checkbox("Remember me", value=True)
     if st.button("Login"):
         if u in USERS and USERS[u] == p:
             st.session_state["authenticated"] = True
@@ -82,14 +89,12 @@ except Exception as e:
 
 def load_data():
     try:
-        # Load transactions
         try:
             t = conn.read(worksheet="transactions", ttl=0)
             if t.empty: t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
         except:
             t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
         
-        # Load categories
         try:
             c = conn.read(worksheet="categories", ttl=0)
             if c.empty or "Name" not in c.columns:
@@ -99,9 +104,7 @@ def load_data():
             
         if not t.empty:
             t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
-            # FIX: Flexible date parsing to prevent format errors
             t['Date'] = pd.to_datetime(t['Date'], errors='coerce')
-            # Filter out any rows that failed to parse (NaT)
             t = t.dropna(subset=['Date'])
         return t, c
     except Exception as e:
@@ -143,7 +146,7 @@ def edit_dialog(idx, row):
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- MAIN INTERFACE ---
+# --- APP ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add", "Visuals", "History"])
 
@@ -161,14 +164,12 @@ with tab1:
                 st.success("Entry Saved!")
                 st.cache_resource.clear()
                 st.rerun()
-            else:
-                st.error("Please add a category first!")
 
 with tab2:
     if not df_transactions.empty:
         inc = df_transactions[df_transactions["Type"] == "Income"]["Amount"].sum()
         exp = df_transactions[df_transactions["Type"] == "Expense"]["Amount"].sum()
-        st.metric("Family Net Balance", f"${(inc - exp):,.2f}", delta=f"${inc:,.2f} Income")
+        st.metric("Net Balance", f"${(inc - exp):,.2f}", delta=f"${inc:,.2f} In")
         st.divider()
         c1, c2 = st.columns(2)
         with c1:
@@ -188,13 +189,13 @@ with tab3:
         work_df = df_transactions.copy().sort_values(by="Date", ascending=False)
         if search: work_df = work_df[work_df['Category'].str.contains(search, case=False)]
         
-        # Header
+        # Header (Now strictly forced horizontal)
         st.markdown("""
-            <div class="history-row" style="font-weight:bold; color:grey; border-bottom:2px solid #eee;">
-                <div>DATE</div>
-                <div>CATEGORY</div>
-                <div style="text-align:right;">AMOUNT</div>
-                <div></div>
+            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:2px solid #eee; font-weight:bold; color:grey; font-size:0.65rem;">
+                <div style="width:15%;">DATE</div>
+                <div style="width:45%;">CAT / TYPE</div>
+                <div style="width:25%; text-align:right;">AMOUNT</div>
+                <div style="width:15%;"></div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -204,28 +205,21 @@ with tab3:
             prefix = "-" if is_ex else "+"
             icon = "💸" if is_ex else "💰"
             
-            # Use a container for each row to handle the button interaction correctly
-            with st.container():
-                # Display the row data using HTML for strict horizontal formatting
-                st.markdown(f"""
-                    <div class="history-row">
-                        <div class="h-date">{row['Date'].strftime('%m/%d')}</div>
-                        <div class="h-cat">{icon} {row['Category']}</div>
-                        <div class="h-amt" style="color:{color};">{prefix}${row['Amount']:,.0f}</div>
-                        <div class="h-edit"></div>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                # Overlay the actual Streamlit button using a negative margin trick
-                # This ensures the layout is strictly horizontal while the button remains clickable
-                _, _, _, btn_col = st.columns([18, 47, 20, 15])
-                with btn_col:
-                    st.markdown('<div class="edit-btn-small" style="margin-top:-42px;">', unsafe_allow_html=True)
-                    if st.button("Edit", key=f"edit_{i}"):
-                        edit_dialog(i, row)
-                    st.markdown('</div>', unsafe_allow_html=True)
+            # Using st.columns with specific widths to match the header
+            c1, c2, c3, c4 = st.columns([1.5, 4.5, 2.5, 1.5], gap="small")
+            with c1:
+                st.markdown(f"<p class='history-text'>{row['Date'].strftime('%m/%d')}</p>", unsafe_allow_html=True)
+            with c2:
+                st.markdown(f"<p class='history-text'>{icon} {row['Category']}</p>", unsafe_allow_html=True)
+            with c3:
+                st.markdown(f"<p class='history-text' style='color:{color}; text-align:right; font-weight:bold;'>{prefix}${row['Amount']:,.0f}</p>", unsafe_allow_html=True)
+            with c4:
+                st.markdown('<div class="edit-btn-mini">', unsafe_allow_html=True)
+                if st.button("Edit", key=f"ed_{i}"):
+                    edit_dialog(i, row)
+                st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.info("History is currently empty.")
+        st.info("History is empty.")
 
 # --- SIDEBAR ---
 with st.sidebar:
