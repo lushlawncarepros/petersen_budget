@@ -1,22 +1,24 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Family Budget", page_icon="💰", layout="centered")
 
-# CSS for Mobile Optimization & Safety Buttons
+# CSS for Mobile Optimization & Actionable Rows
 st.markdown("""
     <style>
     .stButton>button { width: 100%; border-radius: 10px; height: 3em; }
     .stMetric { background-color: #f8f9fa; padding: 10px; border-radius: 10px; border: 1px solid #e9ecef; }
     [data-testid="stMetricValue"] { font-size: 1.8rem; color: #007bff; }
     div[data-testid="stSidebarNav"] { display: none; }
+    
     .delete-btn button { background-color: #ff4b4b !important; color: white !important; }
     .confirm-btn button { background-color: #dc3545 !important; color: white !important; font-weight: bold !important; }
     .update-btn button { background-color: #28a745 !important; color: white !important; }
+    .select-btn button { height: 2.5em !important; background-color: #f0f2f6 !important; color: #31333F !important; border: 1px solid #dcdfe3 !important; padding: 0px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -71,6 +73,7 @@ def load_data():
             
         if not t.empty:
             t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
+            t['Date'] = pd.to_datetime(t['Date'])
         return t, c
     except Exception as e:
         st.error(f"❌ Data Loading Error: {e}")
@@ -175,69 +178,106 @@ with tab2:
 
 with tab3:
     st.subheader("Transaction History")
+    
     if not df_transactions.empty:
-        df_display = df_transactions.copy()
-        df_display['Date'] = pd.to_datetime(df_display['Date'])
-        df_display = df_display.sort_values(by="Date", ascending=False)
+        # --- FILTER SECTION ---
+        with st.expander("🔍 Search & Filter"):
+            f_col1, f_col2 = st.columns(2)
+            with f_col1:
+                search_term = st.text_input("Search Category", "")
+                date_range = st.date_input("Date Range", [datetime.now() - timedelta(days=30), datetime.now()])
+            with f_col2:
+                f_type = st.multiselect("Filter Type", ["Expense", "Income"], default=["Expense", "Income"])
         
-        st.dataframe(df_display, use_container_width=True)
+        # Apply Filters
+        df_filtered = df_transactions.copy()
+        if search_term:
+            df_filtered = df_filtered[df_filtered['Category'].str.contains(search_term, case=False)]
         
-        st.divider()
-        st.subheader("🛠️ Manage Transactions")
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+            df_filtered = df_filtered[(df_filtered['Date'].dt.date >= start_date) & (df_filtered['Date'].dt.date <= end_date)]
         
-        options = []
-        for i, row in df_display.iterrows():
-            options.append(f"{row['Date'].strftime('%Y-%m-%d')} | {row['Category']} | ${row['Amount']:.2f} (ID:{i})")
+        df_filtered = df_filtered[df_filtered['Type'].isin(f_type)]
+        df_filtered = df_filtered.sort_values(by="Date", ascending=False)
+
+        # --- LIST VIEW ---
+        st.write(f"Showing {len(df_filtered)} transactions.")
         
-        selected_option = st.selectbox("Select a transaction to manage:", options)
-        
-        if selected_option:
-            original_index = int(selected_option.split("(ID:")[1].replace(")", ""))
-            row_to_manage = df_transactions.loc[original_index]
-            
-            col_del, col_edit = st.columns(2)
-            
-            with col_del:
-                if "delete_confirm" not in st.session_state:
-                    st.session_state.delete_confirm = False
+        # Headers
+        h1, h2, h3, h4 = st.columns([2, 2, 2, 1])
+        h1.caption("**Date**")
+        h2.caption("**Category**")
+        h3.caption("**Amount**")
+        h4.caption("**Action**")
+
+        # Display rows
+        for i, row in df_filtered.iterrows():
+            c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
+            c1.write(row['Date'].strftime('%m/%d'))
+            c2.write(row['Category'])
+            c3.write(f"${row['Amount']:,.2f}")
+            with c4:
+                st.markdown('<div class="select-btn">', unsafe_allow_html=True)
+                if st.button("Edit", key=f"edit_{i}"):
+                    st.session_state["selected_index"] = i
+                    st.session_state["delete_confirm"] = False
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- MANAGEMENT SECTION ---
+        if "selected_index" in st.session_state:
+            idx = st.session_state["selected_index"]
+            if idx in df_transactions.index:
+                target = df_transactions.loc[idx]
+                st.markdown("---")
+                st.subheader(f"🛠️ Managing {target['Category']}")
                 
-                if not st.session_state.delete_confirm:
-                    st.markdown('<div class="delete-btn">', unsafe_allow_html=True)
-                    if st.button("🗑️ Remove Transaction"):
-                        st.session_state.delete_confirm = True
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-                else:
-                    st.warning("Are you sure?")
-                    st.markdown('<div class="confirm-btn">', unsafe_allow_html=True)
-                    if st.button("⚠️ YES, PERMANENTLY DELETE"):
-                        updated_df = df_transactions.drop(original_index)
-                        conn.update(worksheet="transactions", data=updated_df)
-                        st.session_state.delete_confirm = False
-                        st.success("Deleted and Sheet Cleaned!")
-                        st.cache_resource.clear()
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    if st.button("Cancel"):
-                        st.session_state.delete_confirm = False
-                        st.rerun()
-            
-            with col_edit:
-                with st.expander("✏️ Edit Details"):
-                    new_date = st.date_input("Change Date", pd.to_datetime(row_to_manage["Date"]))
-                    new_cat = st.selectbox("Change Category", get_cat_list(row_to_manage["Type"]))
-                    new_amt = st.number_input("Change Amount", value=float(row_to_manage["Amount"]))
-                    
-                    st.markdown('<div class="update-btn">', unsafe_allow_html=True)
-                    if st.button("✅ Save Changes"):
-                        df_transactions.at[original_index, "Date"] = new_date.strftime('%Y-%m-%d')
-                        df_transactions.at[original_index, "Category"] = new_cat
-                        df_transactions.at[original_index, "Amount"] = new_amt
-                        conn.update(worksheet="transactions", data=df_transactions)
-                        st.success("Updated successfully!")
-                        st.cache_resource.clear()
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
+                m_del, m_edit = st.columns(2)
+                
+                with m_del:
+                    if not st.session_state.get("delete_confirm", False):
+                        st.markdown('<div class="delete-btn">', unsafe_allow_html=True)
+                        if st.button("🗑️ Delete Transaction"):
+                            st.session_state.delete_confirm = True
+                            st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    else:
+                        st.error("Delete this permanently?")
+                        st.markdown('<div class="confirm-btn">', unsafe_allow_html=True)
+                        if st.button("⚠️ CONFIRM DELETE"):
+                            updated_df = df_transactions.drop(idx)
+                            conn.update(worksheet="transactions", data=updated_df)
+                            del st.session_state["selected_index"]
+                            st.session_state.delete_confirm = False
+                            st.success("Deleted!")
+                            st.cache_resource.clear()
+                            st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        if st.button("Cancel"):
+                            st.session_state.delete_confirm = False
+                            st.rerun()
+                
+                with m_edit:
+                    with st.expander("✏️ Edit Details", expanded=True):
+                        e_date = st.date_input("Edit Date", target["Date"])
+                        e_cat = st.selectbox("Edit Category", get_cat_list(target["Type"]), index=get_cat_list(target["Type"]).index(target["Category"]) if target["Category"] in get_cat_list(target["Type"]) else 0)
+                        e_amt = st.number_input("Edit Amount", value=float(target["Amount"]))
+                        
+                        st.markdown('<div class="update-btn">', unsafe_allow_html=True)
+                        if st.button("✅ Save Changes"):
+                            df_transactions.at[idx, "Date"] = e_date.strftime('%Y-%m-%d')
+                            df_transactions.at[idx, "Category"] = e_cat
+                            df_transactions.at[idx, "Amount"] = e_amt
+                            conn.update(worksheet="transactions", data=df_transactions)
+                            del st.session_state["selected_index"]
+                            st.success("Updated!")
+                            st.cache_resource.clear()
+                            st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
+                
+                if st.button("Close Editor"):
+                    del st.session_state["selected_index"]
+                    st.rerun()
     else:
-        st.write("No transactions found yet.")
+        st.info("History is currently empty.")
 
