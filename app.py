@@ -8,42 +8,57 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Styling the Buttons to look like List Items
+# CSS: TRANSFORM BUTTONS INTO COLORED ROWS
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Global Button Reset */
+    /* Global Button Reset for History */
     .stButton>button {
         width: 100%;
         border-radius: 8px;
-        height: auto;
-        padding: 12px 15px;
-        font-family: "Source Code Pro", monospace; /* Monospace aligns columns perfectly */
+        height: 3.5em;
+        padding: 0 12px;
+        font-family: "Source Code Pro", monospace; /* Monospace forces perfect column alignment */
         font-size: 0.85rem;
+        font-weight: 600;
         display: flex;
-        justify-content: space-between;
-        background-color: white;
-        border: 1px solid #f0f2f6;
-        color: #444;
+        justify-content: space-between; /* This pushes Date to left and Price to right? Not exactly inside text node */
         transition: 0.1s;
+        border: 1px solid rgba(0,0,0,0.05);
     }
     
-    /* Hover Effect */
-    .stButton>button:hover {
-        border-color: #007bff;
-        color: #007bff;
-        background-color: #f8f9fa;
+    /* EXPENSE ROW STYLE (Wrapped in div.expense-row) */
+    div.expense-row > button {
+        background-color: #ffebee !important; /* Soft Red */
+        color: #c62828 !important;            /* Dark Red Text */
+        border-left: 5px solid #ef5350 !important;
     }
     
-    /* Specific Styles for Expense vs Income buttons (Targeted by key is hard in pure CSS, 
-       so we use a border-left trick in the main loop logic if possible, 
-       but standard Streamlit buttons share classes. 
-       We will distinguish visually using emojis in the text.) */
+    /* INCOME ROW STYLE (Wrapped in div.income-row) */
+    div.income-row > button {
+        background-color: #e8f5e9 !important; /* Soft Green */
+        color: #2e7d32 !important;            /* Dark Green Text */
+        border-left: 5px solid #66bb6a !important;
+    }
+    
+    /* Hover Effects */
+    div.expense-row > button:hover { background-color: #ffcdd2 !important; border-color: #e57373 !important; }
+    div.income-row > button:hover { background-color: #c8e6c9 !important; border-color: #81c784 !important; }
 
     /* Dialog styling */
     div[data-testid="stDialog"] { border-radius: 20px; }
+    
+    /* Header Styling */
+    .hist-header {
+        font-family: "Source Code Pro", monospace;
+        font-size: 0.75rem;
+        color: #888;
+        font-weight: bold;
+        padding: 0 12px;
+        margin-bottom: 5px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -83,7 +98,6 @@ def load_data_safe():
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # FIX: Force to string before replace to prevent AttributeError
             t_df["Amount"] = t_df["Amount"].astype(str).str.replace(r'[$,]', '', regex=True)
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             
@@ -99,8 +113,7 @@ def load_data_safe():
             c_df = pd.DataFrame(columns=["Type", "Name"])
             
         return t_df, c_df
-    except Exception as e:
-        st.error(f"Data Error: {e}")
+    except Exception:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data_safe()
@@ -109,15 +122,6 @@ def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
     cats = df_c[df_c["Type"] == t_filter]["Name"].unique().tolist()
     return sorted(cats, key=str.lower)
-
-def get_icon(cat_name, row_type):
-    n = str(cat_name).lower()
-    if "groc" in n: return "🛒"
-    if "tithe" in n or "church" in n: return "⛪"
-    if "gas" in n or "fuel" in n: return "⛽"
-    if "ethan" in n: return "👤"
-    if "alesa" in n: return "👩"
-    return "💸" if row_type == "Expense" else "💰"
 
 # --- DIALOG ---
 @st.dialog("Manage Entry")
@@ -202,8 +206,12 @@ with tab3:
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
         
-        # Simple Header
-        st.markdown("**Tap row to edit**")
+        # Simple Header to explain the columns
+        st.markdown("""
+        <div class="hist-header">
+            <span>DATE</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span>CATEGORY</span><span style="float:right">PRICE</span>
+        </div>
+        """, unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
@@ -211,27 +219,30 @@ with tab3:
             # Format Data
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
-            
-            # Icons serve as the visual cue since we can't color button text easily
-            # Red Circle for Expense, Green Circle for Income
-            status_icon = "🔴" if is_ex else "🟢"
-            cat_icon = get_icon(row['Category'], row['Type'])
             amt_str = f"${row['Amount']:,.0f}"
             
-            # Monospace alignment trick: 
-            # We construct a string that looks like a table row
-            # Date (5 chars) | Status (2) | Cat (Variable) | Amount (Right aligned visually by being last)
+            # Truncate category intelligently
+            # "Groceries" -> "Groceries"
+            # "Costco Trip for Party" -> "Costco Tr..."
+            cat_str = row['Category']
+            if len(cat_str) > 12: cat_str = cat_str[:11] + "…"
             
-            # Smart truncate category to fit mobile line
-            cat_display = row['Category'][:15] + ".." if len(row['Category']) > 15 else row['Category']
+            # MONOSPACE ALIGNMENT STRING
+            # Date (5) | Space (3) | Category (12) | Fill Space | Price (6)
+            # We use f-strings to force the spacing.
+            # <  means left align, > means right align
             
-            # The Label
-            # "02/18 🔴 Groceries... $50"
-            label = f"{d_str}  {status_icon}  {cat_display}  {amt_str}"
+            # This generates a string like: "02/18   Groceries      $50"
+            # Since we use Monospace font in CSS, these spaces are exact.
+            label = f"{d_str:<8}{cat_str:<14}{amt_str:>8}"
             
-            # Use container width so it fills the mobile screen width
+            # Apply CSS Class Wrapper
+            css_class = "expense-row" if is_ex else "income-row"
+            
+            st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
             if st.button(label, key=f"btn_{i}", use_container_width=True):
                 edit_dialog(i, row)
+            st.markdown('</div>', unsafe_allow_html=True)
                 
     else:
         st.info("History is empty.")
