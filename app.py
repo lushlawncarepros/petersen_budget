@@ -60,19 +60,18 @@ if not st.session_state["authenticated"]:
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def fetch_data():
-    # We clear all local cache to force a real handshake with Google
+    # Clear all caches to force a fresh handshake
     st.cache_data.clear()
     try:
-        # We read with ttl=0 to disable Streamlit's internal cache
-        t_df = conn.read(worksheet="transactions", ttl=0)
-        c_df = conn.read(worksheet="categories", ttl=0)
+        # Use a SQL-like query to bypass basic range caching and get ALL rows
+        # This is often more reliable than .read() for frequently updated sheets
+        t_df = conn.query('SELECT * FROM "transactions"', ttl=0)
+        c_df = conn.query('SELECT * FROM "categories"', ttl=0)
         
         # Clean Transactions
         if t_df is not None and not t_df.empty:
-            # Normalize column names to Title Case to match our app logic
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             
-            # Ensure the specific columns we need exist
             required = ["Date", "Type", "Category", "Amount"]
             for col in required:
                 if col not in t_df.columns:
@@ -80,6 +79,7 @@ def fetch_data():
             
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
+            # Drop rows where date failed or amount is somehow null, but keep the valid ones
             t_df = t_df.dropna(subset=['Date'])
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
@@ -92,9 +92,15 @@ def fetch_data():
             
         return t_df, c_df
     except Exception as e:
-        return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
+        # If query fails, fallback to simple read
+        try:
+            t_df = conn.read(worksheet="transactions", ttl=0)
+            c_df = conn.read(worksheet="categories", ttl=0)
+            return t_df, c_df
+        except:
+            return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
-# Force a fresh load on every single page view
+# Force fresh load
 df_t, df_c = fetch_data()
 
 def get_cat_list(t_filter):
@@ -114,7 +120,7 @@ with tab1:
         f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add categories in sidebar)"])
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save to Google Sheets"):
-            # 1. FETCH ABSOLUTE LATEST (No Cache)
+            # 1. FETCH ABSOLUTE LATEST
             latest_t, _ = fetch_data()
             # 2. CREATE NEW ROW
             new_entry = pd.DataFrame([{
@@ -160,7 +166,7 @@ with tab3:
             </div>
         """, unsafe_allow_html=True)
         for i, row in work_df.iterrows():
-            is_ex = row['Type'] == 'Expense'
+            is_ex = str(row['Type']).capitalize() == 'Expense'
             color = "#dc3545" if is_ex else "#28a745"
             st.markdown(f"""
                 <div class="ledger-row">
@@ -185,8 +191,8 @@ with st.sidebar:
     with st.expander("🛠️ Debugging Info"):
         st.write(f"Total Rows Found: {len(df_t)}")
         if not df_t.empty:
-            st.write("Column Names:", list(df_t.columns))
-            st.dataframe(df_t.head(5))
+            st.write("Headers:", list(df_t.columns))
+            st.dataframe(df_t) # Show the full data in the debugger to see why it cuts off
 
     if st.button("Log Out"):
         st.session_state["authenticated"] = False
