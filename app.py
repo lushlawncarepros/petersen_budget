@@ -10,27 +10,25 @@ st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="cente
 # CSS for Forced Horizontal Rows & Mobile Polish
 st.markdown("""
     <style>
-    /* Force rows to stay horizontal on mobile */
-    .t-row {
-        display: flex;
-        flex-direction: row;
+    /* Force rows to stay horizontal on mobile using Grid */
+    .history-row {
+        display: grid;
+        grid-template-columns: 18% 47% 20% 15%;
         align-items: center;
-        justify-content: space-between;
-        padding: 12px 0;
+        padding: 10px 0;
         border-bottom: 1px solid #f0f2f6;
-        width: 100%;
-        gap: 5px;
+        font-size: 0.85rem;
     }
-    .t-date { width: 18%; font-size: 0.75rem; color: #888; flex-shrink: 0; }
-    .t-info { width: 47%; font-size: 0.85rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .t-amt { width: 20%; text-align: right; font-weight: bold; font-size: 0.9rem; flex-shrink: 0; }
-    .t-action { width: 15%; text-align: right; flex-shrink: 0; }
+    .h-date { color: #888; font-size: 0.75rem; }
+    .h-cat { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-right: 5px; }
+    .h-amt { text-align: right; font-weight: bold; }
+    .h-edit { text-align: right; }
 
     /* Button Styling */
     .stButton>button { width: 100%; border-radius: 10px; height: 3em; }
     .edit-btn-small button { 
         height: 2.2em !important; 
-        padding: 0 8px !important; 
+        padding: 0 5px !important; 
         font-size: 0.75rem !important;
         background-color: #f0f2f6 !important;
         border: 1px solid #dcdfe3 !important;
@@ -50,7 +48,6 @@ st.markdown("""
 USERS = {"ethan": "petersen1", "alesa": "petersen2"}
 
 if "authenticated" not in st.session_state:
-    # Check URL for ?user=ethan
     params = st.query_params
     if "user" in params and params["user"] in USERS:
         st.session_state["authenticated"] = True
@@ -77,7 +74,6 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- GOOGLE SHEETS CONNECTION ---
-# No extra caching here to prevent the "Empty Connection" bug
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
@@ -103,10 +99,13 @@ def load_data():
             
         if not t.empty:
             t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
-            t['Date'] = pd.to_datetime(t['Date'])
+            # FIX: Flexible date parsing to prevent format errors
+            t['Date'] = pd.to_datetime(t['Date'], errors='coerce')
+            # Filter out any rows that failed to parse (NaT)
+            t = t.dropna(subset=['Date'])
         return t, c
     except Exception as e:
-        st.error(f"Data Error: {e}")
+        st.error(f"Data Loading Error: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 df_transactions, df_cats = load_data()
@@ -185,20 +184,17 @@ with tab2:
 
 with tab3:
     if not df_transactions.empty:
-        # Search
         search = st.text_input("🔍 Search Categories", "")
-        
-        # Filter Logic
         work_df = df_transactions.copy().sort_values(by="Date", ascending=False)
         if search: work_df = work_df[work_df['Category'].str.contains(search, case=False)]
         
-        # Custom Header
+        # Header
         st.markdown("""
-            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:2px solid #eee; font-weight:bold; color:grey; font-size:0.7rem;">
-                <div style="width:18%;">DATE</div>
-                <div style="width:47%;">CATEGORY</div>
-                <div style="width:20%; text-align:right;">AMOUNT</div>
-                <div style="width:15%;"></div>
+            <div class="history-row" style="font-weight:bold; color:grey; border-bottom:2px solid #eee;">
+                <div>DATE</div>
+                <div>CATEGORY</div>
+                <div style="text-align:right;">AMOUNT</div>
+                <div></div>
             </div>
         """, unsafe_allow_html=True)
 
@@ -208,24 +204,26 @@ with tab3:
             prefix = "-" if is_ex else "+"
             icon = "💸" if is_ex else "💰"
             
-            # Using a single container with HTML for the "No-Stack" Row
-            st.markdown(f"""
-                <div class="t-row">
-                    <div class="t-date">{row['Date'].strftime('%m/%d')}</div>
-                    <div class="t-info">{icon} {row['Category']}</div>
-                    <div class="t-amt" style="color:{color};">{prefix}${row['Amount']:,.0f}</div>
-                    <div class="t-action" id="btn_container_{i}"></div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # We place the real Streamlit button in the last slot of a row using columns
-            # to maintain interactivity while the rest is forced HTML.
-            _, _, _, btn_col = st.columns([18, 47, 20, 15])
-            with btn_col:
-                st.markdown('<div class="edit-btn-small" style="margin-top:-45px;">', unsafe_allow_html=True)
-                if st.button("Edit", key=f"edit_btn_{i}"):
-                    edit_dialog(i, row)
-                st.markdown('</div>', unsafe_allow_html=True)
+            # Use a container for each row to handle the button interaction correctly
+            with st.container():
+                # Display the row data using HTML for strict horizontal formatting
+                st.markdown(f"""
+                    <div class="history-row">
+                        <div class="h-date">{row['Date'].strftime('%m/%d')}</div>
+                        <div class="h-cat">{icon} {row['Category']}</div>
+                        <div class="h-amt" style="color:{color};">{prefix}${row['Amount']:,.0f}</div>
+                        <div class="h-edit"></div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Overlay the actual Streamlit button using a negative margin trick
+                # This ensures the layout is strictly horizontal while the button remains clickable
+                _, _, _, btn_col = st.columns([18, 47, 20, 15])
+                with btn_col:
+                    st.markdown('<div class="edit-btn-small" style="margin-top:-42px;">', unsafe_allow_html=True)
+                    if st.button("Edit", key=f"edit_{i}"):
+                        edit_dialog(i, row)
+                    st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("History is currently empty.")
 
@@ -237,7 +235,7 @@ with st.sidebar:
         st.query_params.clear()
         st.rerun()
     st.divider()
-    st.subheader("Manage Categories")
+    st.header("Manage Categories")
     c_type = st.selectbox("Type", ["Expense", "Income"])
     c_new = st.text_input("Category Name")
     if st.button("Add Category"):
