@@ -7,12 +7,16 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Family Budget", page_icon="💰", layout="centered")
 
-# CSS for Mobile Optimization
+# CSS for Mobile Optimization & Safety Buttons
 st.markdown("""
     <style>
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #007bff; color: white; }
-    [data-testid="stMetricValue"] { font-size: 1.8rem; }
+    .stButton>button { width: 100%; border-radius: 10px; height: 3em; }
+    .stMetric { background-color: #f8f9fa; padding: 10px; border-radius: 10px; border: 1px solid #e9ecef; }
+    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #007bff; }
     div[data-testid="stSidebarNav"] { display: none; }
+    .delete-btn button { background-color: #ff4b4b !important; color: white !important; }
+    .confirm-btn button { background-color: #dc3545 !important; color: white !important; font-weight: bold !important; }
+    .update-btn button { background-color: #28a745 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -52,14 +56,12 @@ conn = get_connection()
 def load_data():
     if not conn: return pd.DataFrame(), pd.DataFrame()
     try:
-        # Load transactions
         try:
             t = conn.read(worksheet="transactions", ttl=0)
             if t.empty: t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
         except:
             t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
         
-        # Load categories
         try:
             c = conn.read(worksheet="categories", ttl=0)
             if c.empty or "Name" not in c.columns:
@@ -67,7 +69,6 @@ def load_data():
         except:
             c = pd.DataFrame(columns=["Type", "Name"])
             
-        # Ensure numeric
         if not t.empty:
             t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
         return t, c
@@ -143,30 +144,24 @@ with tab1:
 with tab2:
     st.subheader("Income vs. Expenses")
     if not df_transactions.empty:
-        # High-level Metrics
         income_total = df_transactions[df_transactions["Type"] == "Income"]["Amount"].sum()
         expense_total = df_transactions[df_transactions["Type"] == "Expense"]["Amount"].sum()
         balance = income_total - expense_total
         
         m1, m2, m3 = st.columns(3)
-        m1.metric("Total Income", f"${income_total:,.2f}")
-        m2.metric("Total Expenses", f"${expense_total:,.2f}")
+        m1.metric("Income", f"${income_total:,.2f}")
+        m2.metric("Expenses", f"${expense_total:,.2f}")
         m3.metric("Net Balance", f"${balance:,.2f}", delta=f"{balance:,.2f}")
         
         st.divider()
-        
-        # Dual Charts
         col_ex, col_in = st.columns(2)
-        
         with col_ex:
             st.write("### 💸 Expenses")
             expenses_df = df_transactions[df_transactions["Type"] == "Expense"]
             if not expenses_df.empty:
                 fig_ex = px.pie(expenses_df, values="Amount", names="Category", hole=0.3)
-                fig_ex.update_layout(showlegend=False) # Keep clean on mobile
+                fig_ex.update_layout(showlegend=False)
                 st.plotly_chart(fig_ex, use_container_width=True)
-            else:
-                st.info("No expense data.")
 
         with col_in:
             st.write("### 💰 Income")
@@ -175,15 +170,74 @@ with tab2:
                 fig_in = px.pie(income_df, values="Amount", names="Category", hole=0.3)
                 fig_in.update_layout(showlegend=False)
                 st.plotly_chart(fig_in, use_container_width=True)
-            else:
-                st.info("No income data.")
     else:
         st.info("Start logging data to see your charts!")
 
 with tab3:
     st.subheader("Transaction History")
     if not df_transactions.empty:
-        st.dataframe(df_transactions.sort_values(by="Date", ascending=False), use_container_width=True)
+        df_display = df_transactions.copy()
+        df_display['Date'] = pd.to_datetime(df_display['Date'])
+        df_display = df_display.sort_values(by="Date", ascending=False)
+        
+        st.dataframe(df_display, use_container_width=True)
+        
+        st.divider()
+        st.subheader("🛠️ Manage Transactions")
+        
+        options = []
+        for i, row in df_display.iterrows():
+            options.append(f"{row['Date'].strftime('%Y-%m-%d')} | {row['Category']} | ${row['Amount']:.2f} (ID:{i})")
+        
+        selected_option = st.selectbox("Select a transaction to manage:", options)
+        
+        if selected_option:
+            original_index = int(selected_option.split("(ID:")[1].replace(")", ""))
+            row_to_manage = df_transactions.loc[original_index]
+            
+            col_del, col_edit = st.columns(2)
+            
+            with col_del:
+                if "delete_confirm" not in st.session_state:
+                    st.session_state.delete_confirm = False
+                
+                if not st.session_state.delete_confirm:
+                    st.markdown('<div class="delete-btn">', unsafe_allow_html=True)
+                    if st.button("🗑️ Remove Transaction"):
+                        st.session_state.delete_confirm = True
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    st.warning("Are you sure?")
+                    st.markdown('<div class="confirm-btn">', unsafe_allow_html=True)
+                    if st.button("⚠️ YES, PERMANENTLY DELETE"):
+                        updated_df = df_transactions.drop(original_index)
+                        conn.update(worksheet="transactions", data=updated_df)
+                        st.session_state.delete_confirm = False
+                        st.success("Deleted and Sheet Cleaned!")
+                        st.cache_resource.clear()
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    if st.button("Cancel"):
+                        st.session_state.delete_confirm = False
+                        st.rerun()
+            
+            with col_edit:
+                with st.expander("✏️ Edit Details"):
+                    new_date = st.date_input("Change Date", pd.to_datetime(row_to_manage["Date"]))
+                    new_cat = st.selectbox("Change Category", get_cat_list(row_to_manage["Type"]))
+                    new_amt = st.number_input("Change Amount", value=float(row_to_manage["Amount"]))
+                    
+                    st.markdown('<div class="update-btn">', unsafe_allow_html=True)
+                    if st.button("✅ Save Changes"):
+                        df_transactions.at[original_index, "Date"] = new_date.strftime('%Y-%m-%d')
+                        df_transactions.at[original_index, "Category"] = new_cat
+                        df_transactions.at[original_index, "Amount"] = new_amt
+                        conn.update(worksheet="transactions", data=df_transactions)
+                        st.success("Updated successfully!")
+                        st.cache_resource.clear()
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.write("No transactions found yet.")
 
