@@ -1,30 +1,18 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
+import random
 from streamlit_gsheets import GSheetsConnection
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Implementing "Grok's" Mobile UI Tweaks & Ethan's Horizontal Row Lock
+# CSS: Forced Horizontal Alignment & Grok's Ellipsis
 st.markdown("""
     <style>
-    /* Force columns to stay side-by-side on S25/Narrow screens */
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
-        gap: 0.3rem !important;
-    }
-    [data-testid="column"] {
-        min-width: 0px !important;
-        flex: 1 1 auto !important;
-    }
-
-    /* History Row Styles */
+    [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 0.3rem !important; }
     .ledger-row {
         display: flex;
         flex-direction: row;
@@ -35,29 +23,15 @@ st.markdown("""
         width: 100%;
     }
     .l-date { width: 18%; font-size: 0.75rem; color: #888; flex-shrink: 0; }
-    /* Grok's Ellipsis Fix for long categories */
-    .l-info { 
-        width: 52%; 
-        font-size: 0.85rem; 
-        font-weight: 500; 
-        overflow: hidden; 
-        text-overflow: ellipsis; 
-        white-space: nowrap; 
-    }
+    .l-info { width: 52%; font-size: 0.85rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .l-amt { width: 30%; font-size: 0.9rem; font-weight: bold; text-align: right; flex-shrink: 0; }
-
-    /* Button Styling */
-    .stButton>button { width: 100%; border-radius: 12px; height: 3em; transition: 0.2s; }
+    .stButton>button { width: 100%; border-radius: 12px; height: 3em; }
     div[data-testid="stSidebarNav"] { display: none; }
-    
-    /* Dialog/Form Polish */
-    div[data-testid="stDialog"] { border-radius: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- PERSISTENT AUTHENTICATION ---
+# --- AUTHENTICATION ---
 USERS = {"ethan": "petersen1", "alesa": "petersen2"}
-
 if "authenticated" not in st.session_state:
     params = st.query_params
     if "user" in params and params["user"] in USERS:
@@ -66,8 +40,9 @@ if "authenticated" not in st.session_state:
     else:
         st.session_state["authenticated"] = False
 
-def login_screen():
-    st.title("🔐 Petersen Family Budget")
+if not st.session_state["authenticated"]:
+    # Simple login UI
+    st.title("🔐 Login")
     u = st.text_input("Username").lower()
     p = st.text_input("Password", type="password")
     if st.button("Login"):
@@ -76,109 +51,84 @@ def login_screen():
             st.session_state["user"] = u.capitalize()
             st.query_params["user"] = u
             st.rerun()
-        else:
-            st.error("Invalid credentials")
-
-if not st.session_state["authenticated"]:
-    login_screen()
     st.stop()
 
-# --- DATA ENGINE (Implementing Grok's Fixes) ---
+# --- DATA ENGINE (THE FORCE-RANGE FIX) ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data_sql():
-    st.cache_data.clear() # Clear cache to ensure fresh read
+def load_data_force():
+    st.cache_data.clear()
     try:
-        # 1. Primary: SQL Bypass (Often ignores row-limits)
-        t_df = conn.query('SELECT * FROM "transactions"', ttl=0)
-    except Exception as e:
-        st.sidebar.warning(f"SQL Read failed: {e}. Trying explicit range read...")
-        # 2. Fallback: Explicit full read with nrows=None as suggested by Grok
-        t_df = conn.read(worksheet="transactions", ttl=0, nrows=None, usecols=[0,1,2,3,4])
-    
-    # 3. Reading Categories
-    try:
+        # We explicitly request a large range (A1 to E1000) to force-break the 2-row limit
+        # This bypasses auto-detection of 'used range'
+        t_df = conn.read(worksheet="transactions", ttl=0, spreadsheet="transactions!A1:E1000")
         c_df = conn.read(worksheet="categories", ttl=0)
-    except:
-        c_df = pd.DataFrame(columns=["Type", "Name"])
-
-    # 4. Cleaning Logic
-    if t_df is not None and not t_df.empty:
-        t_df.columns = [str(c).strip().title() for c in t_df.columns]
-        if "Amount" in t_df.columns:
+        
+        if t_df is not None and not t_df.empty:
+            # Clean headers
+            t_df.columns = [str(c).strip().title() for c in t_df.columns]
+            # Verify columns exist
+            for col in ["Date", "Type", "Category", "Amount"]:
+                if col not in t_df.columns: t_df[col] = 0 if col=="Amount" else ""
+            
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
-        if "Date" in t_df.columns:
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
-    else:
-        t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+            # Filter out completely empty rows that might come from the forced range
+            t_df = t_df[t_df['Category'] != ""]
+        else:
+            t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
 
-    if c_df is not None and not c_df.empty:
-        c_df.columns = [str(c).strip().title() for c in c_df.columns]
-    
-    return t_df, c_df
+        if c_df is not None and not c_df.empty:
+            c_df.columns = [str(c).strip().title() for c in c_df.columns]
+        else:
+            c_df = pd.DataFrame(columns=["Type", "Name"])
+            
+        return t_df, c_df
+    except Exception as e:
+        # Final fallback to standard read
+        return conn.read(worksheet="transactions", ttl=0), conn.read(worksheet="categories", ttl=0)
 
-# Global State
-df_t, df_c = load_data_sql()
+# Load state
+df_t, df_c = load_data_force()
 
 def get_cat_list(t_filter):
     if df_c is None or df_c.empty: return []
-    # Support both "Name" or index-based column identification
     col = "Name" if "Name" in df_c.columns else df_c.columns[1]
     return sorted(df_c[df_c["Type"] == t_filter][col].unique().tolist())
 
-def get_smart_icon(cat_name, row_type):
-    n = str(cat_name).lower()
-    if "groc" in n: return "🛒"
-    if "tith" in n or "church" in n: return "⛪"
-    if "gas" in n or "fuel" in n: return "⛽"
-    if "ethan" in n: return "👤"
-    if "alesa" in n: return "👩"
-    if "salary" in n or "pay" in n: return "💵"
-    return "💸" if row_type == "Expense" else "💰"
-
-# --- MAIN APP ---
+# --- UI ---
 st.title("📊 Petersen Budget")
-tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
+tab1, tab2, tab3 = st.tabs(["Add", "Visuals", "History"])
 
 with tab1:
-    st.subheader("New Transaction")
     t_type = st.radio("Type", ["Expense", "Income"], horizontal=True)
     with st.form("entry_form", clear_on_submit=True):
         f_date = st.date_input("Date", datetime.now())
         f_clist = get_cat_list(t_type)
         f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add categories in sidebar)"])
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
-        
-        # Grok's Enhanced Save Logic
-        if st.form_submit_button("Save to Google Sheets"):
-            if f_clist:
-                # 1. Fresh pull of the full sheet state
-                latest_t, _ = load_data_sql()
-                # 2. Build new row
-                new_entry = pd.DataFrame([{
-                    "Date": f_date.strftime('%Y-%m-%d'),
-                    "Type": t_type,
-                    "Category": f_cat,
-                    "Amount": float(f_amt),
-                    "User": st.session_state["user"]
-                }])
-                # 3. Append to history (prevents overwriting)
-                updated = pd.concat([latest_t, new_entry], ignore_index=True)
-                # 4. Push to Sheets
-                conn.update(worksheet="transactions", data=updated)
-                
-                # Success Feedback with row count to confirm it worked
-                st.success(f"Saved! New total records: {len(updated)}")
-                time.sleep(1)
-                st.rerun()
+        if st.form_submit_button("Save Entry"):
+            # READ LATEST
+            latest_t, _ = load_data_force()
+            new_row = pd.DataFrame([{
+                "Date": f_date.strftime('%Y-%m-%d'),
+                "Type": t_type,
+                "Category": f_cat,
+                "Amount": float(f_amt),
+                "User": st.session_state["user"]
+            }])
+            updated = pd.concat([latest_t, new_row], ignore_index=True)
+            conn.update(worksheet="transactions", data=updated)
+            st.success(f"Saved! Rows now: {len(updated)}")
+            time.sleep(1)
+            st.rerun()
 
 with tab2:
     if not df_t.empty:
         inc = df_t[df_t["Type"] == "Income"]["Amount"].sum()
         exp = df_t[df_t["Type"] == "Expense"]["Amount"].sum()
-        st.metric("Net Family Balance", f"${(inc - exp):,.2f}", delta=f"${inc:,.2f} Income")
-        st.divider()
+        st.metric("Net Balance", f"${(inc - exp):,.2f}", delta=f"${inc:,.2f} In")
         c1, c2 = st.columns(2)
         with c1:
             dx = df_t[df_t["Type"] == "Expense"]
@@ -187,63 +137,43 @@ with tab2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
     else:
-        st.info("No data yet. Log something to see visuals.")
+        st.info("No data found.")
 
 with tab3:
-    st.subheader("Transaction Ledger")
+    st.subheader("Ledger")
     if not df_t.empty:
-        # Newest at the top
         work_df = df_t.copy().sort_values(by="Date", ascending=False)
-        
-        # Custom Header
-        st.markdown("""
-            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:2px solid #333; font-weight:bold; color:#555; font-size:0.75rem;">
-                <div style="width:18%;">DATE</div>
-                <div style="width:52%;">CATEGORY</div>
-                <div style="width:30%; text-align:right;">AMOUNT</div>
-            </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown('<div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.7rem; color:grey; border-bottom:1px solid #333;"><div>DATE</div><div>CATEGORY</div><div style="text-align:right;">AMOUNT</div></div>', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             is_ex = str(row['Type']).capitalize() == 'Expense'
-            color = "#dc3545" if is_ex else "#28a745"
             st.markdown(f"""
                 <div class="ledger-row">
                     <div class="l-date">{row['Date'].strftime('%m/%d')}</div>
-                    <div class="l-info">{get_smart_icon(row['Category'], row['Type'])} {row['Category']}</div>
-                    <div class="l-amt" style="color:{color};">{"-" if is_ex else "+"}${row['Amount']:,.0f}</div>
+                    <div class="l-info">{"💸" if is_ex else "💰"} {row['Category']}</div>
+                    <div class="l-amt" style="color:{"#dc3545" if is_ex else "#28a745"};">{"-" if is_ex else "+"}${row['Amount']:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
-    else:
-        st.info("History is currently empty.")
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
-    
-    # Debug Info Expander
-    with st.expander("🛠️ Debug Connection"):
-        st.write(f"Rows found in App: {len(df_t)}")
-        st.write("Current Headers:", list(df_t.columns))
-        if st.button("Force Hard Re-Sync"):
-            st.cache_data.clear()
-            st.rerun()
-
-    if st.button("Log Out"):
-        st.session_state["authenticated"] = False
-        st.query_params.clear()
+    if st.button("🔄 FORCE SYNC"):
+        st.cache_data.clear()
         st.rerun()
-    
+    with st.expander("🛠️ Debug View"):
+        st.write(f"Rows: {len(df_t)}")
+        st.dataframe(df_t)
+    if st.button("Logout"):
+        st.session_state["authenticated"] = False
+        st.rerun()
     st.divider()
-    st.header("Manage Categories")
-    c_type = st.selectbox("Type", ["Expense", "Income"])
-    c_name = st.text_input("New Name")
-    if st.button("Add Category"):
-        if c_name:
-            _, latest_c = load_data_sql()
-            new_cat = pd.DataFrame([{"Type": c_type, "Name": c_name}])
-            updated_c = pd.concat([latest_c, new_cat], ignore_index=True)
+    st.header("Categories")
+    ct = st.selectbox("Type", ["Expense", "Income"])
+    cn = st.text_input("Name")
+    if st.button("Add"):
+        if cn:
+            _, latest_c = load_data_force()
+            updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
             conn.update(worksheet="categories", data=updated_c)
-            st.success(f"Added {c_name}!")
             st.rerun()
 
