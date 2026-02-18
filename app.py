@@ -57,7 +57,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data_robust():
     st.cache_data.clear()
     try:
-        # Read as Raw String (dtype=str) to prevent Google from guessing types
+        # Read as Strings to prevent auto-formatting weirdness
         t_df = conn.read(worksheet="transactions", ttl=0, dtype=str)
         c_df = conn.read(worksheet="categories", ttl=0, dtype=str)
         
@@ -65,20 +65,14 @@ def load_data_robust():
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             
-            # Ensure columns
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # 1. Clean Amount: Remove $ and , then convert
             t_df["Amount"] = t_df["Amount"].str.replace(r'[$,]', '', regex=True)
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             
-            # 2. Clean Date: Convert to string first to handle mixed types (DateObj vs Str)
-            t_df['Date'] = t_df['Date'].astype(str)
-            # Now parse the string, handling multiple formats automatically
+            # Convert to DateTime objects for internal sorting/filtering
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
-            
-            # 3. Filter: Only keep rows where date was successfully parsed
             t_df = t_df.dropna(subset=['Date'])
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
@@ -98,7 +92,7 @@ df_t, df_c = load_data_robust()
 
 def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
-    # Filter and Sort A-Z
+    # Sorted Alphabetically (Case Insensitive)
     cats = df_c[df_c["Type"] == t_filter]["Name"].unique().tolist()
     return sorted(cats, key=str.lower)
 
@@ -130,9 +124,9 @@ with tab1:
                 # 1. READ FRESH
                 latest_t, _ = load_data_robust()
                 
-                # 2. CREATE (Force Date to String YYYY-MM-DD for consistency)
+                # 2. CREATE NEW ENTRY
                 new_entry = pd.DataFrame([{
-                    "Date": f_date.strftime('%Y-%m-%d'),
+                    "Date": pd.to_datetime(f_date), # Ensure it matches format of latest_t
                     "Type": t_type,
                     "Category": f_cat,
                     "Amount": float(f_amt),
@@ -142,7 +136,12 @@ with tab1:
                 # 3. APPEND
                 updated = pd.concat([latest_t, new_entry], ignore_index=True)
                 
-                # 4. SAVE
+                # 4. NORMALIZE DATES (The Fix for Mixed Formatting)
+                # Before saving, we force the entire 'Date' column to be a simple string YYYY-MM-DD.
+                # This strips the time 00:00:00 from old entries and keeps the sheet clean.
+                updated['Date'] = updated['Date'].dt.strftime('%Y-%m-%d')
+                
+                # 5. SAVE
                 conn.update(worksheet="transactions", data=updated)
                 st.success(f"Saved {f_cat}!")
                 time.sleep(1)
@@ -168,6 +167,7 @@ with tab2:
 with tab3:
     st.subheader("Ledger")
     if not df_t.empty:
+        # Sort by Date Object (newest first)
         work_df = df_t.copy().sort_values(by="Date", ascending=False)
         st.markdown('<div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.7rem; color:grey; border-bottom:1px solid #333;"><div>DATE</div><div>CATEGORY</div><div style="text-align:right;">AMOUNT</div></div>', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
@@ -175,9 +175,13 @@ with tab3:
             is_ex = str(row['Type']).capitalize() == 'Expense'
             color = "#dc3545" if is_ex else "#28a745"
             icon = get_icon(row['Category'], row['Type'])
+            
+            # Safe Date Display
+            d_str = row['Date'].strftime('%m/%d')
+            
             st.markdown(f"""
                 <div class="ledger-row">
-                    <div class="l-date">{row['Date'].strftime('%m/%d')}</div>
+                    <div class="l-date">{d_str}</div>
                     <div class="l-info">{icon} {row['Category']}</div>
                     <div class="l-amt" style="color:{color};">{"-" if is_ex else "+"}${row['Amount']:,.0f}</div>
                 </div>
@@ -200,7 +204,7 @@ with st.sidebar:
     st.divider()
     st.header("Categories")
     
-    # NEW: Form for Adding Categories (Auto-clears input)
+    # Auto-Clear Form for Categories
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
         cn = st.text_input("Name")
