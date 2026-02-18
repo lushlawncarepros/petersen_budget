@@ -12,6 +12,7 @@ st.markdown("""
     <style>
     .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #007bff; color: white; }
     [data-testid="stMetricValue"] { font-size: 1.8rem; }
+    div[data-testid="stSidebarNav"] { display: none; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -38,10 +39,9 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- GOOGLE SHEETS CONNECTION ---
-@st.cache_resource(ttl=600)
+@st.cache_resource(ttl=60)
 def get_connection():
     try:
-        # Simplified connection call
         return st.connection("gsheets", type=GSheetsConnection)
     except Exception as e:
         st.error(f"⚠️ Connection Setup Error: {e}")
@@ -52,23 +52,35 @@ conn = get_connection()
 def load_data():
     if not conn: return pd.DataFrame(), pd.DataFrame()
     try:
-        # Load transactions and categories
-        t = conn.read(worksheet="transactions", ttl=0)
-        c = conn.read(worksheet="categories", ttl=0)
-        # Ensure numeric columns are actually numbers
+        # Try to load transactions
+        try:
+            t = conn.read(worksheet="transactions", ttl=0)
+            if t.empty: t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+        except:
+            t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+        
+        # Try to load categories
+        try:
+            c = conn.read(worksheet="categories", ttl=0)
+            if c.empty or "Name" not in c.columns:
+                c = pd.DataFrame(columns=["Type", "Name"])
+        except:
+            c = pd.DataFrame(columns=["Type", "Name"])
+            
+        # Ensure numeric
         if not t.empty:
             t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
         return t, c
     except Exception as e:
-        st.error(f"❌ Sheet Loading Error: {e}")
-        st.info("Check your Sheet tabs: 'transactions' and 'categories'.")
+        st.error(f"❌ Data Loading Error: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 df_transactions, df_cats = load_data()
 
 def get_cat_list(type_filter):
     if df_cats.empty: return []
-    return df_cats[df_cats["Type"] == type_filter]["Name"].tolist()
+    # Filter by type and return unique names
+    return df_cats[df_cats["Type"] == type_filter]["Name"].unique().tolist()
 
 # --- SIDEBAR: CATEGORY MANAGEMENT ---
 with st.sidebar:
@@ -78,63 +90,78 @@ with st.sidebar:
         st.rerun()
     
     st.divider()
+    st.header("⚙️ App Settings")
     st.subheader("Manage Categories")
-    cat_type = st.radio("Category Type", ["Income", "Expense"])
-    new_cat_name = st.text_input(f"New {cat_type} Name")
+    manage_type = st.selectbox("Type to Manage", ["Expense", "Income"])
+    new_cat_name = st.text_input(f"New {manage_type} Name")
     
     if st.button("Add Category"):
-        if new_cat_name and new_cat_name not in get_cat_list(cat_type):
-            new_row = pd.DataFrame([{"Type": cat_type, "Name": new_cat_name}])
-            updated_cats = pd.concat([df_cats, new_row], ignore_index=True)
-            conn.update(worksheet="categories", data=updated_cats)
-            st.success(f"Added {new_cat_name}!")
-            st.rerun()
+        if new_cat_name:
+            if new_cat_name not in get_cat_list(manage_type):
+                new_row = pd.DataFrame([{"Type": manage_type, "Name": new_cat_name}])
+                updated_cats = pd.concat([df_cats, new_row], ignore_index=True)
+                conn.update(worksheet="categories", data=updated_cats)
+                st.success(f"Added {new_cat_name} to {manage_type}s!")
+                st.cache_resource.clear()
+                st.rerun()
+            else:
+                st.warning("That category already exists!")
 
 # --- MAIN INTERFACE ---
 st.title("📊 Petersen Family Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
 with tab1:
-    st.subheader("Add Transaction")
+    st.subheader("Add New Transaction")
+    
+    # 1. Type is OUTSIDE the form so the Category dropdown reacts immediately
+    t_type = st.radio("Is this an Income or Expense?", ["Expense", "Income"], horizontal=True)
+    
     with st.form("transaction_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             t_date = st.date_input("Date", datetime.now())
-            t_type = st.selectbox("Type", ["Expense", "Income"])
+            t_amount = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         with col2:
             current_cats = get_cat_list(t_type)
-            t_cat = st.selectbox("Category", current_cats if current_cats else ["Default"])
-            t_amount = st.number_input("Amount ($)", min_value=0.0, step=0.01)
+            # This now updates immediately because t_type is outside the form
+            t_cat = st.selectbox("Category", current_cats if current_cats else ["(Add categories in sidebar)"])
         
         if st.form_submit_button("Save to Google Sheets"):
-            new_entry = pd.DataFrame([{
-                "Date": t_date.strftime('%Y-%m-%d'),
-                "Type": t_type,
-                "Category": t_cat,
-                "Amount": t_amount,
-                "User": st.session_state["user"]
-            }])
-            updated_df = pd.concat([df_transactions, new_entry], ignore_index=True)
-            conn.update(worksheet="transactions", data=updated_df)
-            st.success("Saved!")
-            st.rerun()
+            if not current_cats:
+                st.error("Please add a category in the sidebar first!")
+            else:
+                new_entry = pd.DataFrame([{
+                    "Date": t_date.strftime('%Y-%m-%d'),
+                    "Type": t_type,
+                    "Category": t_cat,
+                    "Amount": t_amount,
+                    "User": st.session_state["user"]
+                }])
+                updated_df = pd.concat([df_transactions, new_entry], ignore_index=True)
+                conn.update(worksheet="transactions", data=updated_df)
+                st.success(f"Successfully saved {t_cat} transaction!")
+                st.cache_resource.clear()
+                st.rerun()
 
 with tab2:
     st.subheader("Spending Analysis")
     if not df_transactions.empty:
         expenses_df = df_transactions[df_transactions["Type"] == "Expense"]
         if not expenses_df.empty:
-            fig = px.pie(expenses_df, values="Amount", names="Category")
+            fig = px.pie(expenses_df, values="Amount", names="Category", hole=0.3)
             st.plotly_chart(fig, use_container_width=True)
         
         income = df_transactions[df_transactions["Type"] == "Income"]["Amount"].sum()
         expense = df_transactions[df_transactions["Type"] == "Expense"]["Amount"].sum()
-        st.metric("Monthly Balance", f"${(income - expense):,.2f}", delta=f"${income:,.2f} Income")
+        st.metric("Net Balance", f"${(income - expense):,.2f}", delta=f"${income:,.2f} Income")
     else:
-        st.info("No data found yet.")
+        st.info("Start logging data to see your charts!")
 
 with tab3:
     st.subheader("Transaction History")
     if not df_transactions.empty:
         st.dataframe(df_transactions.sort_values(by="Date", ascending=False), use_container_width=True)
+    else:
+        st.write("No transactions found yet.")
 
