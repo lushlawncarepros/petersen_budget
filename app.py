@@ -4,33 +4,22 @@ import plotly.express as px
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
-# --- CONFIGURATION & SETTINGS ---
+# --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Family Budget", page_icon="💰", layout="centered")
 
-# CSS for Mobile Optimization (Samsung S25 / Tablet)
+# CSS for Mobile Optimization
 st.markdown("""
     <style>
     .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #007bff; color: white; }
-    .stTextInput>div>div>input { border-radius: 10px; }
     [data-testid="stMetricValue"] { font-size: 1.8rem; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- GOOGLE SHEETS CONNECTION ---
-# This uses the credentials you created. We will input them into Streamlit Secrets later.
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- AUTHENTICATION ---
+USERS = {"ethan": "petersen1", "alesa": "petersen2"}
 
-def load_data():
-    # Load transactions and categories from the specific tabs
-    transactions = conn.read(worksheet="transactions", ttl=0)
-    categories_df = conn.read(worksheet="categories", ttl=0)
-    return transactions, categories_df
-
-# --- AUTHENTICATION SYSTEM ---
-USERS = {
-    "ethan": "petersen1",
-    "alesa": "petersen2"
-}
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
 def login():
     st.title("🔐 Petersen Budget Login")
@@ -42,17 +31,36 @@ def login():
             st.session_state["user"] = user.capitalize()
             st.rerun()
         else:
-            st.error("Invalid username or password")
-
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+            st.error("Invalid credentials")
 
 if not st.session_state["authenticated"]:
     login()
     st.stop()
 
-# --- INITIALIZE DATA ---
-df_transactions, df_cats = load_data()
+# --- GOOGLE SHEETS CONNECTION (PROTECTED) ---
+@st.cache_resource(ttl=600)
+def get_connection():
+    try:
+        # We use st.connection but handle potential errors gracefully
+        return st.connection("gsheets", type=GSheetsConnection)
+    except Exception as e:
+        st.error(f"⚠️ Connection Setup Error: {e}")
+        st.info("Check your Streamlit Secrets for formatting issues.")
+        return None
+
+conn = get_connection()
+
+if conn:
+    try:
+        # Load data from the sheet
+        df_transactions = conn.read(worksheet="transactions", ttl=0)
+        df_cats = conn.read(worksheet="categories", ttl=0)
+    except Exception as e:
+        st.error(f"❌ Error reading Sheet: {e}")
+        st.warning("Ensure your Sheet has tabs named 'transactions' and 'categories'.")
+        st.stop()
+else:
+    st.stop()
 
 # Helper to get category lists
 def get_cat_list(type_filter):
@@ -80,7 +88,6 @@ with st.sidebar:
 
 # --- MAIN INTERFACE ---
 st.title("📊 Petersen Family Budget")
-
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
 with tab1:
@@ -91,14 +98,11 @@ with tab1:
             t_date = st.date_input("Date", datetime.now())
             t_type = st.selectbox("Type", ["Expense", "Income"])
         with col2:
-            # Dynamically pull categories from the 'categories' tab
             current_cats = get_cat_list(t_type)
             t_cat = st.selectbox("Category", current_cats if current_cats else ["Default"])
             t_amount = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         
-        submit = st.form_submit_button("Save to Google Sheets")
-        
-        if submit:
+        if st.form_submit_button("Save to Google Sheets"):
             new_entry = pd.DataFrame([{
                 "Date": t_date.strftime('%Y-%m-%d'),
                 "Type": t_type,
@@ -108,7 +112,7 @@ with tab1:
             }])
             updated_df = pd.concat([df_transactions, new_entry], ignore_index=True)
             conn.update(worksheet="transactions", data=updated_df)
-            st.success("Saved to your Spreadsheet!")
+            st.success("Saved!")
             st.rerun()
 
 with tab2:
@@ -116,20 +120,17 @@ with tab2:
     if not df_transactions.empty:
         expenses_df = df_transactions[df_transactions["Type"] == "Expense"]
         if not expenses_df.empty:
-            fig = px.pie(expenses_df, values="Amount", names="Category", title="Expenses by Category")
+            fig = px.pie(expenses_df, values="Amount", names="Category")
             st.plotly_chart(fig, use_container_width=True)
         
-        # Summary Metrics
         income = df_transactions[df_transactions["Type"] == "Income"]["Amount"].sum()
         expense = df_transactions[df_transactions["Type"] == "Expense"]["Amount"].sum()
         st.metric("Monthly Balance", f"${(income - expense):,.2f}", delta=f"${income:,.2f} Income")
     else:
-        st.info("No data found in Google Sheets yet.")
+        st.info("No data found yet.")
 
 with tab3:
     st.subheader("Transaction History")
     if not df_transactions.empty:
         st.dataframe(df_transactions.sort_values(by="Date", ascending=False), use_container_width=True)
-    else:
-        st.write("Sheet is empty.")
 
