@@ -8,20 +8,55 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: minimal tweaks, mostly relying on native dataframe now
+# CSS: Transform Buttons into "List Items" for the History Tab
 st.markdown("""
     <style>
-    /* Clean up the dataframe look */
-    [data-testid="stDataFrame"] { width: 100%; }
-    
-    /* Bigger buttons for easy tapping */
-    .stButton>button { width: 100%; border-radius: 12px; height: 3em; }
-    
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
     /* Dialog Radius */
     div[data-testid="stDialog"] { border-radius: 20px; }
+    
+    /* Standard Action Buttons (Save, Add, Login) */
+    .stButton>button { 
+        width: 100%; 
+        border-radius: 12px; 
+        height: 3em; 
+        font-weight: 500;
+    }
+    
+    /* HISTORY LIST STYLING - The Magic Class */
+    /* We target buttons inside the history container to look like rows */
+    div[data-testid="stVerticalBlock"] > div > div > div > div > .stButton > button {
+        text-align: left; /* Align text to left like a list */
+        justify-content: flex-start;
+        height: auto;
+        padding: 12px 10px;
+        background-color: white;
+        border: 1px solid #f0f2f6;
+        border-radius: 8px;
+        margin-bottom: 2px;
+        color: #31333F;
+        font-family: "Source Sans Pro", sans-serif;
+        font-size: 0.9rem;
+    }
+    
+    /* Hover effect for history items */
+    div[data-testid="stVerticalBlock"] > div > div > div > div > .stButton > button:hover {
+        border-color: #007bff;
+        color: #007bff;
+        background-color: #f8f9fa;
+    }
+    
+    /* Header Styling */
+    .history-header {
+        font-size: 0.8rem;
+        font-weight: bold;
+        color: #888;
+        padding-bottom: 5px;
+        border-bottom: 2px solid #eee;
+        margin-bottom: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -53,7 +88,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data_robust():
     st.cache_data.clear()
     try:
-        # Read as String to keep it safe
+        # Read as Strings
         t_df = conn.read(worksheet="transactions", ttl=0, dtype=str)
         c_df = conn.read(worksheet="categories", ttl=0, dtype=str)
         
@@ -67,7 +102,7 @@ def load_data_robust():
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
-            # We add a hidden ID column to track rows safely
+            # Add index for safe editing
             t_df = t_df.reset_index(drop=True)
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
@@ -105,22 +140,20 @@ def edit_dialog(row_index, row_data):
     
     # Form inputs
     e_date = st.date_input("Date", row_data["Date"])
-    # Get category list for this type
     clist = get_cat_list(row_data["Type"])
-    # Default to current category, or index 0 if missing
+    # Default to current category or first item
     c_idx = clist.index(row_data["Category"]) if row_data["Category"] in clist else 0
     e_cat = st.selectbox("Category", clist, index=c_idx)
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("✅ Save Changes"):
-            # Update the specific row using the index
+        if st.button("✅ Update"):
             df_t.at[row_index, "Date"] = pd.to_datetime(e_date)
             df_t.at[row_index, "Category"] = e_cat
             df_t.at[row_index, "Amount"] = e_amt
             
-            # Format Date for Sheet Consistency
+            # Format Date for Sheet
             df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
             
             conn.update(worksheet="transactions", data=df_t)
@@ -130,11 +163,8 @@ def edit_dialog(row_index, row_data):
             
     with c2:
         if st.button("🗑️ Delete"):
-            # Drop the row and save
             new_df = df_t.drop(row_index)
-            # Fix date format before save
             new_df['Date'] = new_df['Date'].dt.strftime('%Y-%m-%d')
-            
             conn.update(worksheet="transactions", data=new_df)
             st.success("Deleted!")
             time.sleep(0.5)
@@ -187,49 +217,37 @@ with tab2:
         st.info("No data yet.")
 
 with tab3:
-    st.subheader("Tap a row to Edit")
+    st.markdown("<div class='history-header'>TAP ROW TO EDIT</div>", unsafe_allow_html=True)
     if not df_t.empty:
-        # Prepare Data for Display
-        display_df = df_t.copy().sort_values(by="Date", ascending=False)
+        # Sort display but keep index alignment
+        work_df = df_t.copy()
+        work_df['sort_date'] = pd.to_datetime(work_df['Date'])
+        work_df = work_df.sort_values(by="sort_date", ascending=False)
         
-        # Add Icons to Category Name for display
-        display_df['IconCat'] = display_df.apply(lambda x: f"{get_icon(x['Category'], x['Type'])} {x['Category']}", axis=1)
-        
-        # Color Logic for Amount (Red/Green)
-        def color_amounts(val):
-            color = 'red' if val < 0 else 'green'
-            return f'color: {color}; font-weight: bold;'
-
-        # Create a display-only view with calculated columns
-        # We start with negative amounts for expenses to make them Red/Green logically
-        display_df['DisplayAmount'] = display_df.apply(lambda x: -x['Amount'] if x['Type'] == 'Expense' else x['Amount'], axis=1)
-        
-        # Final DataFrame for the UI
-        ui_df = display_df[['Date', 'IconCat', 'DisplayAmount']].copy()
-        ui_df.columns = ["Date", "Category", "Amount"] # Nice Headers
-        
-        # --- THE INTERACTIVE TABLE ---
-        selection = st.dataframe(
-            ui_df.style.format({
-                "Date": lambda t: t.strftime("%m/%d"), # Short Date
-                "Amount": "${:,.0f}" # Whole Dollars
-            }).map(lambda x: 'color: #d63031; font-weight:bold' if x < 0 else 'color: #00b894; font-weight:bold', subset=['Amount']),
-            use_container_width=True,
-            hide_index=True,
-            on_select="rerun", # This makes it clickable!
-            selection_mode="single-row"
-        )
-        
-        # Handle Selection
-        if selection.selection.rows:
-            selected_visual_index = selection.selection.rows[0]
-            # Map back to the original dataframe index
-            # Since ui_df is sorted, we grab the index from the sorted dataframe
-            actual_index = ui_df.index[selected_visual_index]
+        # Iterate through rows and create a button for each
+        for i, row in work_df.iterrows():
+            # Format the button label to look like a row
+            # Format: "02/18  🔴  -$50   🛒 Groceries"
             
-            # Open Dialog
-            edit_dialog(actual_index, df_t.loc[actual_index])
-
+            d_str = row['Date'].strftime('%m/%d')
+            is_ex = row['Type'] == 'Expense'
+            
+            # Indicator Emoji (Red/Green Circle)
+            status = "🔴" if is_ex else "🟢"
+            # Icon
+            icon = get_icon(row['Category'], row['Type'])
+            # Amount String
+            amt_prefix = "-" if is_ex else "+"
+            amt_str = f"{amt_prefix}${row['Amount']:,.0f}"
+            
+            # Construct Label with non-breaking spaces for alignment
+            # Note: Buttons center text by default, CSS above forces left-align
+            label = f"{d_str}  {status} {amt_str}   {icon} {row['Category']}"
+            
+            # The button itself
+            if st.button(label, key=f"hist_{i}", use_container_width=True):
+                edit_dialog(i, row)
+                
     else:
         st.info("History is empty.")
 
