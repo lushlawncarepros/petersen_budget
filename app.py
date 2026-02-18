@@ -8,7 +8,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS for Mobile Layout
+# CSS for Mobile Layout (No-Stacking)
 st.markdown("""
     <style>
     [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 0.3rem !important; }
@@ -54,33 +54,32 @@ if not st.session_state["authenticated"]:
 # --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data_final():
+def load_data_standard():
+    # 1. Clear memory
     st.cache_data.clear()
+    
     try:
-        # 1. FORCE RANGE: Request A1:E2000 to break the 2-row cache limit
-        t_df = conn.read(worksheet="transactions", spreadsheet="transactions!A1:E2000", ttl=0)
+        # 2. Standard Read (Recovered from the crash version)
+        # We removed the bad 'spreadsheet=' parameter that caused the 200 Error
+        t_df = conn.read(worksheet="transactions", ttl=0)
         c_df = conn.read(worksheet="categories", ttl=0)
         
-        # 2. FILTER EMPTIES: Clean up the 1000+ empty rows we just forced
+        # 3. Clean Transactions
         if t_df is not None and not t_df.empty:
-            # Clean Headers
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             
-            # Ensure Key Columns Exist
+            # Ensure columns exist
             for col in ["Date", "Type", "Category", "Amount"]:
                 if col not in t_df.columns:
                     t_df[col] = 0 if col == "Amount" else ""
 
-            # Force Types
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
-            
-            # THE FIX: Drop rows where Date is NaT (Not a Time)
-            # This removes the empty rows so the app doesn't crash
             t_df = t_df.dropna(subset=['Date'])
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
 
+        # 4. Clean Categories
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
@@ -88,12 +87,12 @@ def load_data_final():
             
         return t_df, c_df
     except Exception as e:
-        # Sidebar warning instead of crash
+        # Show the actual error in the sidebar if it fails again
         st.sidebar.error(f"Read Error: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 # Load Data
-df_t, df_c = load_data_final()
+df_t, df_c = load_data_standard()
 
 def get_cat_list(t_filter):
     if df_c is None or df_c.empty: return []
@@ -121,8 +120,7 @@ with tab1:
         f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add categories in sidebar)"])
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save"):
-            # Load fresh to append safely
-            latest_t, _ = load_data_final()
+            latest_t, _ = load_data_standard()
             new_row = pd.DataFrame([{
                 "Date": f_date.strftime('%Y-%m-%d'),
                 "Type": t_type,
@@ -158,21 +156,14 @@ with tab3:
         st.markdown('<div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.7rem; color:grey; border-bottom:1px solid #333;"><div>DATE</div><div>CATEGORY</div><div style="text-align:right;">AMOUNT</div></div>', unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
-            # UI SAFETY CHECK: Ensure we have a valid date to display
             if pd.isnull(row['Date']): continue
-            
-            try:
-                d_str = row['Date'].strftime('%m/%d')
-            except:
-                continue # Skip row if date is broken
-
             is_ex = str(row['Type']).capitalize() == 'Expense'
             color = "#dc3545" if is_ex else "#28a745"
             icon = get_icon(row['Category'], row['Type'])
             
             st.markdown(f"""
                 <div class="ledger-row">
-                    <div class="l-date">{d_str}</div>
+                    <div class="l-date">{row['Date'].strftime('%m/%d')}</div>
                     <div class="l-info">{icon} {row['Category']}</div>
                     <div class="l-amt" style="color:{color};">{"-" if is_ex else "+"}${row['Amount']:,.0f}</div>
                 </div>
@@ -187,9 +178,9 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
     
-    # DEBUG VIEW: Check this to see row count!
     with st.expander("Debug Info"):
-        st.write(f"Rows Loaded: {len(df_t)}")
+        st.write(f"Rows: {len(df_t)}")
+        # Simple dataframe view to check connection
         st.dataframe(df_t)
         
     if st.button("Logout"):
@@ -201,7 +192,7 @@ with st.sidebar:
     cn = st.text_input("Name")
     if st.button("Add"):
         if cn:
-            _, latest_c = load_data_final()
+            _, latest_c = load_data_standard()
             updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
             conn.update(worksheet="categories", data=updated_c)
             st.rerun()
