@@ -8,63 +8,68 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: The "Tight List" Design
+# CSS: TRANSFORM BUTTONS INTO COLORED ROWS (TIGHT LAYOUT)
 st.markdown("""
     <style>
-    /* 1. Remove gap between rows for a compact list look */
-    [data-testid="stVerticalBlock"] {
-        gap: 0rem !important;
-    }
-    
-    /* 2. Hide Sidebar Nav */
+    /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* 3. Invisible Button Overlay */
-    .row-btn button {
-        background-color: transparent !important;
-        color: transparent !important;
-        border: none !important;
+    /* Remove vertical gaps between rows */
+    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
+    
+    /* Global Button Reset for History */
+    .stButton>button {
         width: 100%;
-        height: 45px; /* Matches card height */
-        margin-top: -45px; /* Pulls button UP to cover the card */
-        z-index: 2; /* Sits on top */
-        cursor: pointer;
-    }
-    
-    .row-btn button:hover {
-        background-color: transparent !important;
-        color: transparent !important;
-        border: none !important;
-    }
-    
-    /* 4. The Visual Card (Underneath) */
-    .trans-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 45px;
+        border-radius: 0px; /* Square edges for list look */
+        height: 3.8em;
         padding: 0 12px;
+        font-family: "Source Code Pro", monospace;
+        font-size: 0.85rem;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: 0.1s;
+        border: none;
         border-bottom: 1px solid rgba(0,0,0,0.05);
-        font-family: "Source Sans Pro", sans-serif;
+        margin-bottom: 0px !important;
     }
     
-    /* Typography inside the card */
-    .tc-date { width: 15%; font-size: 0.75rem; color: #666; }
-    .tc-cat  { width: 55%; font-size: 0.9rem; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tc-amt  { width: 30%; font-size: 0.9rem; font-weight: 700; text-align: right; color: #222; }
+    /* First and Last items radius tweak (Optional polish) */
+    div:first-child > .stButton > button { border-top-left-radius: 10px; border-top-right-radius: 10px; }
+    div:last-child > .stButton > button { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; border-bottom: none; }
+    
+    /* EXPENSE ROW STYLE */
+    div.expense-row > button {
+        background-color: #ffebee !important; /* Soft Red */
+        color: #c62828 !important;            /* Dark Red Text */
+        border-left: 6px solid #ef5350 !important;
+    }
+    
+    /* INCOME ROW STYLE */
+    div.income-row > button {
+        background-color: #e8f5e9 !important; /* Soft Green */
+        color: #2e7d32 !important;            /* Dark Green Text */
+        border-left: 6px solid #66bb6a !important;
+    }
+    
+    /* Hover Effects */
+    div.expense-row > button:hover { background-color: #ffcdd2 !important; }
+    div.income-row > button:hover { background-color: #c8e6c9 !important; }
+
+    /* Dialog styling */
+    div[data-testid="stDialog"] { border-radius: 20px; }
     
     /* Header Styling */
     .hist-header {
-        display: flex;
-        padding: 10px 12px 5px 12px;
-        font-size: 0.7rem;
-        font-weight: bold;
+        font-family: "Source Code Pro", monospace;
+        font-size: 0.75rem;
         color: #888;
+        font-weight: bold;
+        padding: 10px 12px;
+        margin-bottom: 0px;
         border-bottom: 2px solid #eee;
     }
-    
-    /* Global Button Styling (for non-list buttons) */
-    .stButton>button { border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -93,7 +98,7 @@ if not st.session_state["authenticated"]:
 # --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data_robust():
+def load_data_safe():
     st.cache_data.clear()
     try:
         t_df = conn.read(worksheet="transactions", ttl=0, dtype=str)
@@ -104,8 +109,10 @@ def load_data_robust():
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            t_df["Amount"] = t_df["Amount"].str.replace(r'[$,]', '', regex=True)
+            # FIX: Force .astype(str) before string replacement to prevent crashes
+            t_df["Amount"] = t_df["Amount"].astype(str).str.replace(r'[$,]', '', regex=True)
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
+            
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
@@ -118,10 +125,12 @@ def load_data_robust():
             c_df = pd.DataFrame(columns=["Type", "Name"])
             
         return t_df, c_df
-    except Exception:
+    except Exception as e:
+        # Graceful failure - return empty DF but log error
+        st.sidebar.error(f"Data Error: {e}")
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
-df_t, df_c = load_data_robust()
+df_t, df_c = load_data_safe()
 
 def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
@@ -135,15 +144,21 @@ def get_icon(cat_name, row_type):
     if "gas" in n or "fuel" in n: return "⛽"
     if "ethan" in n: return "👤"
     if "alesa" in n: return "👩"
+    if "sav" in n: return "🏦"
     return "💸" if row_type == "Expense" else "💰"
 
-# --- EDITOR DIALOG ---
+# --- DIALOG ---
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
     clist = get_cat_list(row_data["Type"])
-    c_idx = clist.index(row_data["Category"]) if row_data["Category"] in clist else 0
+    # Safe index lookup
+    try:
+        c_idx = clist.index(row_data["Category"])
+    except ValueError:
+        c_idx = 0
+        
     e_cat = st.selectbox("Category", clist, index=c_idx)
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
@@ -181,7 +196,7 @@ with tab1:
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save"):
             if f_clist:
-                latest_t, _ = load_data_robust()
+                latest_t, _ = load_data_safe()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date),
                     "Type": t_type,
@@ -222,11 +237,9 @@ with tab3:
         
         # Header
         st.markdown("""
-            <div class="hist-header">
-                <div style="width:20%">DATE</div>
-                <div style="width:50%">CATEGORY</div>
-                <div style="width:30%; text-align:right">PRICE</div>
-            </div>
+        <div class="hist-header">
+            <span>DATE</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span>CATEGORY</span><span style="float:right">PRICE</span>
+        </div>
         """, unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
@@ -237,23 +250,20 @@ with tab3:
             amt_str = f"${row['Amount']:,.0f}"
             icon = get_icon(row['Category'], row['Type'])
             
-            # --- 1. THE VISUAL CARD ---
-            # Soft Green for Income, Soft Red for Expense
-            bg_color = "#ffebee" if is_ex else "#e8f5e9"
+            # Truncate category
+            cat_str = row['Category']
+            if len(cat_str) > 14: cat_str = cat_str[:13] + "…"
             
-            # We use st.markdown to draw the colored bar
-            st.markdown(f"""
-                <div class="trans-card" style="background-color: {bg_color};">
-                    <div class="tc-date">{d_str}</div>
-                    <div class="tc-cat">{icon} {row['Category']}</div>
-                    <div class="tc-amt">{amt_str}</div>
-                </div>
-            """, unsafe_allow_html=True)
+            # Construct Button Label (Monospace Alignment)
+            # Date (Left) | Icon + Category (Middle) | Price (Right)
+            cat_display = f"{icon} {cat_str}"
+            label = f"{d_str:<8}{cat_display:<16}{amt_str:>8}"
             
-            # --- 2. THE CLICKABLE OVERLAY ---
-            # The CSS class .row-btn moves this button UP by 45px to cover the card
-            st.markdown('<div class="row-btn">', unsafe_allow_html=True)
-            if st.button(f"btn_{i}", key=f"h_{i}", label_visibility="hidden"):
+            # Apply CSS Wrapper
+            css_class = "expense-row" if is_ex else "income-row"
+            
+            st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
+            if st.button(label, key=f"btn_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
                 
@@ -280,7 +290,7 @@ with st.sidebar:
         if st.form_submit_button("Add Category"):
             if cn:
                 st.cache_resource.clear()
-                _, latest_c = load_data_robust()
+                _, latest_c = load_data_safe()
                 updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c)
                 st.success("Added!")
