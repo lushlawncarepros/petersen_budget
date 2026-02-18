@@ -54,12 +54,10 @@ if not st.session_state["authenticated"]:
 # --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data_raw():
-    # Force clear ALL caches (Data + Resource) to prevent "Freezing"
+def load_data_robust():
     st.cache_data.clear()
-    
     try:
-        # Read as string to capture everything safely
+        # Read as Raw String (dtype=str) to prevent Google from guessing types
         t_df = conn.read(worksheet="transactions", ttl=0, dtype=str)
         c_df = conn.read(worksheet="categories", ttl=0, dtype=str)
         
@@ -71,10 +69,16 @@ def load_data_raw():
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # Convert
+            # 1. Clean Amount: Remove $ and , then convert
             t_df["Amount"] = t_df["Amount"].str.replace(r'[$,]', '', regex=True)
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
+            
+            # 2. Clean Date: Convert to string first to handle mixed types (DateObj vs Str)
+            t_df['Date'] = t_df['Date'].astype(str)
+            # Now parse the string, handling multiple formats automatically
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
+            
+            # 3. Filter: Only keep rows where date was successfully parsed
             t_df = t_df.dropna(subset=['Date'])
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
@@ -89,12 +93,12 @@ def load_data_raw():
     except Exception as e:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
-# Initial Load
-df_t, df_c = load_data_raw()
+# Global Load
+df_t, df_c = load_data_robust()
 
 def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
-    # Filter by type AND sort alphabetically
+    # Filter and Sort A-Z
     cats = df_c[df_c["Type"] == t_filter]["Name"].unique().tolist()
     return sorted(cats, key=str.lower)
 
@@ -105,7 +109,6 @@ def get_icon(cat_name, row_type):
     if "gas" in n or "fuel" in n: return "⛽"
     if "ethan" in n: return "👤"
     if "alesa" in n: return "👩"
-    if "home" in n or "rent" in n or "mortgage" in n: return "🏠"
     return "💸" if row_type == "Expense" else "💰"
 
 # --- UI ---
@@ -122,15 +125,12 @@ with tab1:
         f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add categories in sidebar)"])
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         
-        if st.form_submit_button("Save to Google Sheets"):
+        if st.form_submit_button("Save"):
             if f_clist:
-                # 1. Clear Connection Cache (The Fix)
-                st.cache_resource.clear()
+                # 1. READ FRESH
+                latest_t, _ = load_data_robust()
                 
-                # 2. Read Fresh
-                latest_t, _ = load_data_raw()
-                
-                # 3. Create & Append
+                # 2. CREATE (Force Date to String YYYY-MM-DD for consistency)
                 new_entry = pd.DataFrame([{
                     "Date": f_date.strftime('%Y-%m-%d'),
                     "Type": t_type,
@@ -138,9 +138,11 @@ with tab1:
                     "Amount": float(f_amt),
                     "User": st.session_state["user"]
                 }])
+                
+                # 3. APPEND
                 updated = pd.concat([latest_t, new_entry], ignore_index=True)
                 
-                # 4. Save
+                # 4. SAVE
                 conn.update(worksheet="transactions", data=updated)
                 st.success(f"Saved {f_cat}!")
                 time.sleep(1)
@@ -161,7 +163,7 @@ with tab2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
     else:
-        st.info("No data yet.")
+        st.info("No data found.")
 
 with tab3:
     st.subheader("Ledger")
@@ -198,33 +200,23 @@ with st.sidebar:
     st.divider()
     st.header("Categories")
     
-    # Session state logic to clear input after add
-    if "new_cat_input" not in st.session_state:
-        st.session_state.new_cat_input = ""
+    # NEW: Form for Adding Categories (Auto-clears input)
+    with st.form("cat_form", clear_on_submit=True):
+        ct = st.selectbox("Type", ["Expense", "Income"])
+        cn = st.text_input("Name")
+        submitted = st.form_submit_button("Add Category")
         
-    ct = st.selectbox("Type", ["Expense", "Income"])
-    # We bind the input to the session state key
-    cn = st.text_input("Name", key="new_cat_input")
-    
-    if st.button("Add"):
-        if cn:
-            # Clear resource cache to ensure we get latest categories file
-            st.cache_resource.clear() 
-            _, latest_c = load_data_raw()
+        if submitted and cn:
+            # 1. Clear Cache
+            st.cache_resource.clear()
+            # 2. Read Fresh
+            _, latest_c = load_data_robust()
+            # 3. Append
             updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
+            # 4. Save
             conn.update(worksheet="categories", data=updated_c)
             st.success("Added!")
-            
-            # Clear input manually via session state hack for next rerun is handled by key
-            # But to actually clear it we need to rerunning with empty state
-            # Since key binding is 2-way, we can't easily clear inside the button without a callback
-            # but usually st.rerun() resets it if we don't persist it. 
-            # Actually, to force clear, we delete the key or set to empty
-            # NOTE: Streamlit input clearing is tricky. The reliable way is a callback.
-            pass 
-            # We will rely on rerun clearing the logic if we didn't use a form. 
-            # But to be safe, I'll switch to a simple callback approach in next version if this doesn't clear.
-            # For now, rerun triggers a refresh.
+            time.sleep(0.5)
             st.rerun()
 
 
