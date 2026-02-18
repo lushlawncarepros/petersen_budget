@@ -37,33 +37,37 @@ if not st.session_state["authenticated"]:
     login()
     st.stop()
 
-# --- GOOGLE SHEETS CONNECTION (PROTECTED) ---
+# --- GOOGLE SHEETS CONNECTION ---
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1Jtuk8qHSfHZX3pyb3MI79qABo0FrPRbGMeCJ83wsKHg"
+
 @st.cache_resource(ttl=600)
 def get_connection():
     try:
-        # We use st.connection but handle potential errors gracefully
-        return st.connection("gsheets", type=GSheetsConnection)
+        # We explicitly pass the URL here as a backup
+        return st.connection("gsheets", type=GSheetsConnection, spreadsheet=SHEET_URL)
     except Exception as e:
         st.error(f"⚠️ Connection Setup Error: {e}")
-        st.info("Check your Streamlit Secrets for formatting issues.")
         return None
 
 conn = get_connection()
 
-if conn:
+def load_data():
+    if not conn: return pd.DataFrame(), pd.DataFrame()
     try:
-        # Load data from the sheet
-        df_transactions = conn.read(worksheet="transactions", ttl=0)
-        df_cats = conn.read(worksheet="categories", ttl=0)
+        # Load transactions and categories
+        t = conn.read(worksheet="transactions", ttl=0)
+        c = conn.read(worksheet="categories", ttl=0)
+        return t, c
     except Exception as e:
-        st.error(f"❌ Error reading Sheet: {e}")
-        st.warning("Ensure your Sheet has tabs named 'transactions' and 'categories'.")
-        st.stop()
-else:
-    st.stop()
+        st.error(f"❌ Sheet Loading Error: {e}")
+        st.info("Ensure your Sheet tabs are named 'transactions' and 'categories' exactly.")
+        return pd.DataFrame(), pd.DataFrame()
+
+df_transactions, df_cats = load_data()
 
 # Helper to get category lists
 def get_cat_list(type_filter):
+    if df_cats.empty: return []
     return df_cats[df_cats["Type"] == type_filter]["Name"].tolist()
 
 # --- SIDEBAR: CATEGORY MANAGEMENT ---
@@ -123,8 +127,8 @@ with tab2:
             fig = px.pie(expenses_df, values="Amount", names="Category")
             st.plotly_chart(fig, use_container_width=True)
         
-        income = df_transactions[df_transactions["Type"] == "Income"]["Amount"].sum()
-        expense = df_transactions[df_transactions["Type"] == "Expense"]["Amount"].sum()
+        income = pd.to_numeric(df_transactions[df_transactions["Type"] == "Income"]["Amount"]).sum()
+        expense = pd.to_numeric(df_transactions[df_transactions["Type"] == "Expense"]["Amount"]).sum()
         st.metric("Monthly Balance", f"${(income - expense):,.2f}", delta=f"${income:,.2f} Income")
     else:
         st.info("No data found yet.")
