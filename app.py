@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS for Strict Mobile Rows (Tidy & Non-Stacking)
+# CSS for Strict Mobile Rows
 st.markdown("""
     <style>
     .ledger-row {
@@ -22,14 +22,12 @@ st.markdown("""
     .l-date { width: 18%; font-size: 0.8rem; color: #888; flex-shrink: 0; }
     .l-cat  { width: 52%; font-size: 0.9rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .l-amt  { width: 30%; font-size: 0.9rem; font-weight: bold; text-align: right; flex-shrink: 0; }
-
-    /* Button Styling */
-    .stButton>button { width: 100%; border-radius: 12px; height: 3.2em; transition: 0.2s; }
+    .stButton>button { width: 100%; border-radius: 12px; height: 3.2em; }
     div[data-testid="stSidebarNav"] { display: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- PERSISTENT AUTHENTICATION ---
+# --- AUTHENTICATION ---
 USERS = {"ethan": "petersen1", "alesa": "petersen2"}
 
 if "authenticated" not in st.session_state:
@@ -44,12 +42,11 @@ def login_screen():
     st.title("🔐 Petersen Budget")
     u = st.text_input("Username").lower()
     p = st.text_input("Password", type="password")
-    rem = st.checkbox("Remember me", value=True)
     if st.button("Login"):
         if u in USERS and USERS[u] == p:
             st.session_state["authenticated"] = True
             st.session_state["user"] = u.capitalize()
-            if rem: st.query_params["user"] = u
+            st.query_params["user"] = u
             st.rerun()
         else:
             st.error("Invalid credentials")
@@ -63,83 +60,84 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
     try:
-        # Using ttl=0 to minimize caching
-        t = conn.read(worksheet="transactions", ttl=0)
-        c = conn.read(worksheet="categories", ttl=0)
-        
-        if t is None or t.empty:
+        # 1. READ TRANSACTIONS
+        t_raw = conn.read(worksheet="transactions", ttl=0)
+        if t_raw is None or t_raw.empty:
             t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
-        if c is None or c.empty:
+        else:
+            t = t_raw.copy()
+            # Clean up column names (strip spaces, lowercase) for internal matching
+            t.columns = [str(c).strip().capitalize() for c in t.columns]
+            
+        # 2. READ CATEGORIES
+        c_raw = conn.read(worksheet="categories", ttl=0)
+        if c_raw is None or c_raw.empty:
             c = pd.DataFrame(columns=["Type", "Name"])
+        else:
+            c = c_raw.copy()
+            c.columns = [str(c).strip().capitalize() for c in c.columns]
         
-        t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
-        t['Date'] = pd.to_datetime(t['Date'], errors='coerce')
-        t = t.dropna(subset=['Date'])
+        # 3. DATA CLEANING
+        if "Amount" in t.columns:
+            t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
+        if "Date" in t.columns:
+            t['Date'] = pd.to_datetime(t['Date'], errors='coerce')
+            t = t.dropna(subset=['Date'])
+            
         return t, c
-    except Exception:
+    except Exception as e:
+        st.sidebar.error(f"Read Error: {e}")
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data()
 
 def get_cat_list(t_filter):
-    if df_c.empty: return []
+    if df_c.empty or "Name" not in df_c.columns: return []
     return sorted(df_c[df_c["Type"] == t_filter]["Name"].unique().tolist())
 
 def get_icon(cat_name, row_type):
     n = str(cat_name).lower()
     if "groc" in n: return "🛒"
-    if "tithe" in n or "church" in n: return "⛪"
+    if "tith" in n or "church" in n: return "⛪"
     if "gas" in n or "fuel" in n: return "⛽"
     if "ethan" in n: return "👤"
     if "alesa" in n: return "👩"
-    if "salary" in n or "pay" in n: return "💵"
     return "💸" if row_type == "Expense" else "💰"
 
-# --- MAIN APP ---
+# --- MAIN INTERFACE ---
 st.title("📊 Petersen Family Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
 with tab1:
-    st.subheader("New Transaction")
+    st.subheader("Add Transaction")
     t_type = st.radio("Type", ["Expense", "Income"], horizontal=True)
-    
     with st.form("entry_form", clear_on_submit=True):
         f_date = st.date_input("Date", datetime.now())
         f_clist = get_cat_list(t_type)
-        f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add categories in sidebar)"])
+        f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add one in sidebar)"])
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
-        
         if st.form_submit_button("Save to Google Sheets"):
-            if f_clist:
-                # MANDATORY: Clear cache before reading to ensure we append to the REAL latest version
-                st.cache_data.clear()
-                
-                # Read fresh from cloud
-                latest_ledger = conn.read(worksheet="transactions", ttl=0)
-                if latest_ledger is None: latest_ledger = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
-                
-                # Build new entry
-                new_entry = pd.DataFrame([{
-                    "Date": f_date.strftime('%Y-%m-%d'),
-                    "Type": t_type,
-                    "Category": f_cat,
-                    "Amount": float(f_amt),
-                    "User": st.session_state["user"]
-                }])
-                
-                # Append and Save
-                updated_ledger = pd.concat([latest_ledger, new_entry], ignore_index=True)
-                conn.update(worksheet="transactions", data=updated_ledger)
-                
-                st.success(f"Saved {f_cat} Entry!")
-                st.cache_data.clear()
-                st.rerun()
+            # FRESH READ TO PREVENT OVERWRITE
+            st.cache_data.clear()
+            latest_t, _ = load_data()
+            new_entry = pd.DataFrame([{
+                "Date": f_date.strftime('%Y-%m-%d'),
+                "Type": t_type,
+                "Category": f_cat,
+                "Amount": float(f_amt),
+                "User": st.session_state["user"]
+            }])
+            updated = pd.concat([latest_t, new_entry], ignore_index=True)
+            conn.update(worksheet="transactions", data=updated)
+            st.success("Entry Saved!")
+            st.cache_data.clear()
+            st.rerun()
 
 with tab2:
     if not df_t.empty:
         inc = df_t[df_t["Type"] == "Income"]["Amount"].sum()
         exp = df_t[df_t["Type"] == "Expense"]["Amount"].sum()
-        st.metric("Net Balance", f"${(inc - exp):,.2f}", delta=f"${inc:,.2f} Total Income")
+        st.metric("Net Balance", f"${(inc - exp):,.2f}", delta=f"${inc:,.2f} Income")
         st.divider()
         c1, c2 = st.columns(2)
         with c1:
@@ -153,13 +151,8 @@ with tab2:
 
 with tab3:
     st.subheader("Transaction History")
-    st.caption("Showing all recorded transactions (no filters).")
-    
     if not df_t.empty:
-        # Force newest to top
         work_df = df_t.copy().sort_values(by="Date", ascending=False)
-        
-        # Header
         st.markdown("""
             <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:2px solid #333; font-weight:bold; color:#555; font-size:0.75rem;">
                 <div style="width:18%;">DATE</div>
@@ -167,48 +160,47 @@ with tab3:
                 <div style="width:30%; text-align:right;">AMOUNT</div>
             </div>
         """, unsafe_allow_html=True)
-
         for i, row in work_df.iterrows():
             is_ex = row['Type'] == 'Expense'
-            clr = "#dc3545" if is_ex else "#28a745"
-            sym = "-" if is_ex else "+"
-            ico = get_icon(row['Category'], row['Type'])
-            
+            color = "#dc3545" if is_ex else "#28a745"
             st.markdown(f"""
                 <div class="ledger-row">
                     <div class="l-date">{row['Date'].strftime('%m/%d')}</div>
-                    <div class="l-cat">{row['Category']} {ico}</div>
-                    <div class="l-amt" style="color:{clr};">{sym}${row['Amount']:,.0f}</div>
+                    <div class="l-cat">{get_icon(row['Category'], row['Type'])} {row['Category']}</div>
+                    <div class="l-amt" style="color:{color};">{"-" if is_ex else "+"}${row['Amount']:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
     else:
         st.info("History is currently empty.")
 
-# --- SIDEBAR ---
+# --- SIDEBAR: DEBUG & CATEGORIES ---
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
     
-    # NEW: Manual Sync Button to fix the "Stale Data" glitch
-    if st.button("🔄 Sync with Google Sheets"):
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        st.rerun()
-        
+    # DEBUG SECTION
+    with st.expander("🛠️ Debug Info"):
+        st.write(f"Total Transactions Found: {len(df_t)}")
+        st.write("Columns Found:", list(df_t.columns))
+        if st.button("Force Total Reset"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun()
+
     if st.button("Log Out"):
         st.session_state["authenticated"] = False
         st.query_params.clear()
         st.rerun()
-        
+    
     st.divider()
     st.header("Manage Categories")
     c_type = st.selectbox("Type", ["Expense", "Income"])
-    c_name = st.text_input("New Category Name")
+    c_name = st.text_input("New Name")
     if st.button("Add Category"):
-        if c_name and c_name not in get_cat_list(c_type):
-            latest_cats = conn.read(worksheet="categories", ttl=0)
+        if c_name:
+            _, latest_c = load_data()
             new_cat = pd.DataFrame([{"Type": c_type, "Name": c_name}])
-            updated_cats = pd.concat([latest_cats, new_cat], ignore_index=True)
-            conn.update(worksheet="categories", data=updated_cats)
+            updated_c = pd.concat([latest_c, new_cat], ignore_index=True)
+            conn.update(worksheet="categories", data=updated_c)
             st.success(f"Added {c_name}!")
             st.cache_data.clear()
             st.rerun()
