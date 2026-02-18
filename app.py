@@ -52,14 +52,14 @@ conn = get_connection()
 def load_data():
     if not conn: return pd.DataFrame(), pd.DataFrame()
     try:
-        # Try to load transactions
+        # Load transactions
         try:
             t = conn.read(worksheet="transactions", ttl=0)
             if t.empty: t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
         except:
             t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
         
-        # Try to load categories
+        # Load categories
         try:
             c = conn.read(worksheet="categories", ttl=0)
             if c.empty or "Name" not in c.columns:
@@ -79,7 +79,6 @@ df_transactions, df_cats = load_data()
 
 def get_cat_list(type_filter):
     if df_cats.empty: return []
-    # Filter by type and return unique names
     return df_cats[df_cats["Type"] == type_filter]["Name"].unique().tolist()
 
 # --- SIDEBAR: CATEGORY MANAGEMENT ---
@@ -101,7 +100,7 @@ with st.sidebar:
                 new_row = pd.DataFrame([{"Type": manage_type, "Name": new_cat_name}])
                 updated_cats = pd.concat([df_cats, new_row], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_cats)
-                st.success(f"Added {new_cat_name} to {manage_type}s!")
+                st.success(f"Added {new_cat_name}!")
                 st.cache_resource.clear()
                 st.rerun()
             else:
@@ -113,8 +112,6 @@ tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
 with tab1:
     st.subheader("Add New Transaction")
-    
-    # 1. Type is OUTSIDE the form so the Category dropdown reacts immediately
     t_type = st.radio("Is this an Income or Expense?", ["Expense", "Income"], horizontal=True)
     
     with st.form("transaction_form", clear_on_submit=True):
@@ -124,7 +121,6 @@ with tab1:
             t_amount = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         with col2:
             current_cats = get_cat_list(t_type)
-            # This now updates immediately because t_type is outside the form
             t_cat = st.selectbox("Category", current_cats if current_cats else ["(Add categories in sidebar)"])
         
         if st.form_submit_button("Save to Google Sheets"):
@@ -140,21 +136,47 @@ with tab1:
                 }])
                 updated_df = pd.concat([df_transactions, new_entry], ignore_index=True)
                 conn.update(worksheet="transactions", data=updated_df)
-                st.success(f"Successfully saved {t_cat} transaction!")
+                st.success(f"Successfully saved {t_cat}!")
                 st.cache_resource.clear()
                 st.rerun()
 
 with tab2:
-    st.subheader("Spending Analysis")
+    st.subheader("Income vs. Expenses")
     if not df_transactions.empty:
-        expenses_df = df_transactions[df_transactions["Type"] == "Expense"]
-        if not expenses_df.empty:
-            fig = px.pie(expenses_df, values="Amount", names="Category", hole=0.3)
-            st.plotly_chart(fig, use_container_width=True)
+        # High-level Metrics
+        income_total = df_transactions[df_transactions["Type"] == "Income"]["Amount"].sum()
+        expense_total = df_transactions[df_transactions["Type"] == "Expense"]["Amount"].sum()
+        balance = income_total - expense_total
         
-        income = df_transactions[df_transactions["Type"] == "Income"]["Amount"].sum()
-        expense = df_transactions[df_transactions["Type"] == "Expense"]["Amount"].sum()
-        st.metric("Net Balance", f"${(income - expense):,.2f}", delta=f"${income:,.2f} Income")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Income", f"${income_total:,.2f}")
+        m2.metric("Total Expenses", f"${expense_total:,.2f}")
+        m3.metric("Net Balance", f"${balance:,.2f}", delta=f"{balance:,.2f}")
+        
+        st.divider()
+        
+        # Dual Charts
+        col_ex, col_in = st.columns(2)
+        
+        with col_ex:
+            st.write("### 💸 Expenses")
+            expenses_df = df_transactions[df_transactions["Type"] == "Expense"]
+            if not expenses_df.empty:
+                fig_ex = px.pie(expenses_df, values="Amount", names="Category", hole=0.3)
+                fig_ex.update_layout(showlegend=False) # Keep clean on mobile
+                st.plotly_chart(fig_ex, use_container_width=True)
+            else:
+                st.info("No expense data.")
+
+        with col_in:
+            st.write("### 💰 Income")
+            income_df = df_transactions[df_transactions["Type"] == "Income"]
+            if not income_df.empty:
+                fig_in = px.pie(income_df, values="Amount", names="Category", hole=0.3)
+                fig_in.update_layout(showlegend=False)
+                st.plotly_chart(fig_in, use_container_width=True)
+            else:
+                st.info("No income data.")
     else:
         st.info("Start logging data to see your charts!")
 
