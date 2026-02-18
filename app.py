@@ -3,13 +3,12 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import time
-import random
 from streamlit_gsheets import GSheetsConnection
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Forced Horizontal Alignment & Grok's Ellipsis
+# CSS for Mobile Layout
 st.markdown("""
     <style>
     [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 0.3rem !important; }
@@ -41,7 +40,6 @@ if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    # Simple login UI
     st.title("🔐 Login")
     u = st.text_input("Username").lower()
     p = st.text_input("Password", type="password")
@@ -53,32 +51,41 @@ if not st.session_state["authenticated"]:
             st.rerun()
     st.stop()
 
-# --- DATA ENGINE (THE FORCE-RANGE FIX) ---
+# --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data_force():
+def load_data_safe():
     st.cache_data.clear()
     try:
-        # We explicitly request a large range (A1 to E1000) to force-break the 2-row limit
-        # This bypasses auto-detection of 'used range'
-        t_df = conn.read(worksheet="transactions", ttl=0, spreadsheet="transactions!A1:E1000")
+        # SQL Query to bypass range limits
+        try:
+            t_df = conn.query('SELECT * FROM "transactions"', ttl=0)
+        except:
+            # Fallback to reading a large range if SQL fails
+            t_df = conn.read(worksheet="transactions", ttl=0, nrows=2000)
+            
         c_df = conn.read(worksheet="categories", ttl=0)
         
+        # --- CLEANING TRANSACTIONS ---
         if t_df is not None and not t_df.empty:
-            # Clean headers
+            # Standardize Headers
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
-            # Verify columns exist
-            for col in ["Date", "Type", "Category", "Amount"]:
-                if col not in t_df.columns: t_df[col] = 0 if col=="Amount" else ""
             
+            # Ensure columns exist
+            for col in ["Date", "Type", "Category", "Amount"]:
+                if col not in t_df.columns:
+                    t_df[col] = 0 if col == "Amount" else ""
+
+            # Force Data Types
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
+            
+            # CRITICAL: Drop rows where Date is NaT (Not a Time) / Empty
             t_df = t_df.dropna(subset=['Date'])
-            # Filter out completely empty rows that might come from the forced range
-            t_df = t_df[t_df['Category'] != ""]
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
 
+        # --- CLEANING CATEGORIES ---
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
@@ -86,16 +93,25 @@ def load_data_force():
             
         return t_df, c_df
     except Exception as e:
-        # Final fallback to standard read
-        return conn.read(worksheet="transactions", ttl=0), conn.read(worksheet="categories", ttl=0)
+        st.error(f"Data Load Error: {e}")
+        return pd.DataFrame(), pd.DataFrame()
 
-# Load state
-df_t, df_c = load_data_force()
+# Load Data
+df_t, df_c = load_data_safe()
 
 def get_cat_list(t_filter):
     if df_c is None or df_c.empty: return []
     col = "Name" if "Name" in df_c.columns else df_c.columns[1]
     return sorted(df_c[df_c["Type"] == t_filter][col].unique().tolist())
+
+def get_icon(cat_name, row_type):
+    n = str(cat_name).lower()
+    if "groc" in n: return "🛒"
+    if "tithe" in n or "church" in n: return "⛪"
+    if "gas" in n or "fuel" in n: return "⛽"
+    if "ethan" in n: return "👤"
+    if "alesa" in n: return "👩"
+    return "💸" if row_type == "Expense" else "💰"
 
 # --- UI ---
 st.title("📊 Petersen Budget")
@@ -108,9 +124,8 @@ with tab1:
         f_clist = get_cat_list(t_type)
         f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add categories in sidebar)"])
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
-        if st.form_submit_button("Save Entry"):
-            # READ LATEST
-            latest_t, _ = load_data_force()
+        if st.form_submit_button("Save"):
+            latest_t, _ = load_data_safe()
             new_row = pd.DataFrame([{
                 "Date": f_date.strftime('%Y-%m-%d'),
                 "Type": t_type,
@@ -120,7 +135,7 @@ with tab1:
             }])
             updated = pd.concat([latest_t, new_row], ignore_index=True)
             conn.update(worksheet="transactions", data=updated)
-            st.success(f"Saved! Rows now: {len(updated)}")
+            st.success("Saved!")
             time.sleep(1)
             st.rerun()
 
@@ -137,22 +152,36 @@ with tab2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
     else:
-        st.info("No data found.")
+        st.info("No data yet.")
 
 with tab3:
     st.subheader("Ledger")
     if not df_t.empty:
         work_df = df_t.copy().sort_values(by="Date", ascending=False)
         st.markdown('<div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.7rem; color:grey; border-bottom:1px solid #333;"><div>DATE</div><div>CATEGORY</div><div style="text-align:right;">AMOUNT</div></div>', unsafe_allow_html=True)
+        
         for i, row in work_df.iterrows():
+            # SAFETY CHECK: If date is missing/invalid, skip the row so app doesn't crash
+            if pd.isnull(row['Date']): continue
+            
+            try:
+                date_str = row['Date'].strftime('%m/%d')
+            except:
+                date_str = "--/--"
+
             is_ex = str(row['Type']).capitalize() == 'Expense'
+            color = "#dc3545" if is_ex else "#28a745"
+            icon = get_icon(row['Category'], row['Type'])
+            
             st.markdown(f"""
                 <div class="ledger-row">
-                    <div class="l-date">{row['Date'].strftime('%m/%d')}</div>
-                    <div class="l-info">{"💸" if is_ex else "💰"} {row['Category']}</div>
-                    <div class="l-amt" style="color:{"#dc3545" if is_ex else "#28a745"};">{"-" if is_ex else "+"}${row['Amount']:,.0f}</div>
+                    <div class="l-date">{date_str}</div>
+                    <div class="l-info">{icon} {row['Category']}</div>
+                    <div class="l-amt" style="color:{color};">{"-" if is_ex else "+"}${row['Amount']:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
+    else:
+        st.info("History is empty.")
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -160,7 +189,7 @@ with st.sidebar:
     if st.button("🔄 FORCE SYNC"):
         st.cache_data.clear()
         st.rerun()
-    with st.expander("🛠️ Debug View"):
+    with st.expander("Debug Info"):
         st.write(f"Rows: {len(df_t)}")
         st.dataframe(df_t)
     if st.button("Logout"):
@@ -172,8 +201,9 @@ with st.sidebar:
     cn = st.text_input("Name")
     if st.button("Add"):
         if cn:
-            _, latest_c = load_data_force()
+            _, latest_c = load_data_safe()
             updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
             conn.update(worksheet="categories", data=updated_c)
             st.rerun()
+
 
