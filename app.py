@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS for Tidy Mobile Rows
+# CSS for Tidy Mobile Rows & Persistent Alignment
 st.markdown("""
     <style>
     .history-row {
@@ -62,30 +62,24 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- GOOGLE SHEETS CONNECTION ---
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception:
-    st.error("Connection Failed.")
-    st.stop()
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
     try:
+        # We use ttl=0 to ensure we aren't seeing old data on refresh
         t = conn.read(worksheet="transactions", ttl=0)
         c = conn.read(worksheet="categories", ttl=0)
         
-        # Initialize empty dataframes with columns if Sheet is blank
         if t is None or t.empty:
             t = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
         if c is None or c.empty:
             c = pd.DataFrame(columns=["Type", "Name"])
         
-        # Clean up data types
         t["Amount"] = pd.to_numeric(t["Amount"], errors='coerce').fillna(0)
         t['Date'] = pd.to_datetime(t['Date'], errors='coerce')
         t = t.dropna(subset=['Date'])
         return t, c
-    except Exception as e:
-        # Fallback for fresh sheets
+    except Exception:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data()
@@ -93,6 +87,18 @@ df_t, df_c = load_data()
 def get_cat_list(t_filter):
     if df_c.empty: return []
     return df_c[df_c["Type"] == t_filter]["Name"].unique().tolist()
+
+def get_smart_icon(cat_name, row_type):
+    # Map icons based on category names
+    name = cat_name.lower()
+    if "grocer" in name: return "🛒"
+    if "tithe" in name or "church" in name: return "⛪"
+    if "fuel" in name or "gas" in name: return "⛽"
+    if "rent" in name or "house" in name: return "🏠"
+    if "ethan" in name or "alesa" in name: return "💰"
+    if "salary" in name or "pay" in name: return "💵"
+    # Fallback icons
+    return "💸" if row_type == "Expense" else "💰"
 
 # --- MAIN APP ---
 st.title("📊 Petersen Budget")
@@ -110,7 +116,11 @@ with tab1:
         
         if st.form_submit_button("Save to Google Sheets"):
             if f_clist:
-                # 1. Create the new row
+                # CRITICAL FIX: Fresh read right before saving to prevent overwriting
+                latest_ledger = conn.read(worksheet="transactions", ttl=0)
+                if latest_ledger is None or latest_ledger.empty:
+                    latest_ledger = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+                
                 new_row = pd.DataFrame([{
                     "Date": f_date.strftime('%Y-%m-%d'),
                     "Type": t_type,
@@ -119,12 +129,11 @@ with tab1:
                     "User": st.session_state["user"]
                 }])
                 
-                # 2. Append to full history and save whole block to Sheet
-                # This ensures we don't "overwrite" existing entries
-                updated_ledger = pd.concat([df_t, new_row], ignore_index=True)
+                # Append and Update
+                updated_ledger = pd.concat([latest_ledger, new_row], ignore_index=True)
                 conn.update(worksheet="transactions", data=updated_ledger)
                 
-                st.success(f"Added {f_cat} Entry!")
+                st.success(f"Successfully Recorded {f_cat}!")
                 st.cache_resource.clear()
                 st.rerun()
             else:
@@ -134,22 +143,17 @@ with tab2:
     if not df_t.empty:
         inc_sum = df_t[df_t["Type"] == "Income"]["Amount"].sum()
         exp_sum = df_t[df_t["Type"] == "Expense"]["Amount"].sum()
-        net_val = inc_sum - exp_sum
-        
-        st.metric("Family Net Balance", f"${net_val:,.2f}", delta=f"${inc_sum:,.2f} Income")
+        st.metric("Family Net Balance", f"${(inc_sum - exp_sum):,.2f}", delta=f"${inc_sum:,.2f} Income")
         st.divider()
-        
-        col_e, col_i = st.columns(2)
-        with col_e:
+        c_e, c_i = st.columns(2)
+        with c_e:
             dx = df_t[df_t["Type"] == "Expense"]
-            if not dx.empty: 
-                st.plotly_chart(px.pie(dx, values="Amount", names="Category", title="Expenses"), use_container_width=True)
-        with col_i:
+            if not dx.empty: st.plotly_chart(px.pie(dx, values="Amount", names="Category", title="Expenses"), use_container_width=True)
+        with c_i:
             di = df_t[df_t["Type"] == "Income"]
-            if not di.empty: 
-                st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
+            if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
     else:
-        st.info("No data logged yet.")
+        st.info("No data yet.")
 
 with tab3:
     st.subheader("Transaction Ledger")
@@ -164,19 +168,15 @@ with tab3:
             with f_col2:
                 show_types = st.multiselect("Filter Type", ["Expense", "Income"], default=["Expense", "Income"])
         
-        # Apply Filters to the Data
+        # Apply Filters
         work_df = df_t.copy()
-        
         if search_cat:
             work_df = work_df[work_df['Category'].str.contains(search_cat, case=False)]
-        
         if len(date_range) == 2:
-            start_date, end_date = date_range
-            work_df = work_df[(work_df['Date'].dt.date >= start_date) & (work_df['Date'].dt.date <= end_date)]
-            
+            work_df = work_df[(work_df['Date'].dt.date >= date_range[0]) & (work_df['Date'].dt.date <= date_range[1])]
         work_df = work_df[work_df['Type'].isin(show_types)]
         
-        # Final Sort: Newest at top
+        # Newest on top
         work_df = work_df.sort_values(by="Date", ascending=False)
         
         # --- HEADER ---
@@ -190,10 +190,10 @@ with tab3:
 
         # --- ROWS ---
         for i, row in work_df.iterrows():
-            is_expense = row['Type'] == 'Expense'
-            color = "#dc3545" if is_expense else "#28a745"
-            prefix = "-" if is_expense else "+"
-            icon = "💸" if is_expense else "💰"
+            is_ex = row['Type'] == 'Expense'
+            color = "#dc3545" if is_ex else "#28a745"
+            prefix = "-" if is_ex else "+"
+            icon = get_smart_icon(row['Category'], row['Type'])
             
             st.markdown(f"""
                 <div class="history-row">
@@ -203,7 +203,7 @@ with tab3:
                 </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("The history is currently empty.")
+        st.info("History is currently empty.")
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -215,13 +215,12 @@ with st.sidebar:
     st.divider()
     st.header("Manage Categories")
     c_type = st.selectbox("Type", ["Expense", "Income"])
-    c_new_name = st.text_input("New Category Name")
+    c_new = st.text_input("New Category Name")
     if st.button("Add Category"):
-        if c_new_name and c_new_name not in get_cat_list(c_type):
-            new_cat_row = pd.DataFrame([{"Type": c_type, "Name": c_new_name}])
-            updated_cats = pd.concat([df_c, new_cat_row], ignore_index=True)
+        if c_new and c_new not in get_cat_list(c_type):
+            updated_cats = pd.concat([df_c, pd.DataFrame([{"Type": c_type, "Name": c_new}])], ignore_index=True)
             conn.update(worksheet="categories", data=updated_cats)
-            st.success(f"Added {c_new_name}!")
+            st.success(f"Added {c_new}!")
             st.cache_resource.clear()
             st.rerun()
 
