@@ -24,11 +24,11 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. LAYOUT SPACING - Row Container Height: 45px & Gap Between Rows: 0px */
+    /* 3. LAYOUT SPACING - Row Container Height changed to 40px; margin-bottom: 0px */
     .row-container {
         position: relative; 
-        height: 45px; 
-        margin-bottom: 0px; /* Changed from 8px to 0px as requested */
+        height: 40px; /* Changed from 45px to 40px */
+        margin-bottom: 0px; 
         width: 100%;
         background-color: transparent; 
     }
@@ -64,7 +64,7 @@ st.markdown("""
         top: 0 !important;
         left: 0 !important;
         width: 100% !important;
-        height: 45px !important;
+        height: 45px !important; /* Kept at 45px per instructions */
         z-index: 5 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -78,8 +78,8 @@ st.markdown("""
         outline: none !important;
         width: 100% !important;
         height: 45px !important; /* Total Height: 45px */
-        padding: 0px !important; /* Padding (All sides): 0px */
-        margin: 0px !important;  /* Margin (All sides): 0px */
+        padding: 0px !important; /* Padding: 0px */
+        margin: 0px !important;  /* Margin: 0px */
         display: block !important;
         cursor: pointer;
     }
