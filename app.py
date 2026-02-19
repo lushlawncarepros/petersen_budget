@@ -8,28 +8,25 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Grid-Stacked Mobile Ledger
+# CSS: Absolute Overlay for perfect alignment
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove default spacing between rows */
+    /* Remove vertical gaps between rows */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
-    /* THE STACK CONTAINER - Forces both layers into the same physical space */
-    .row-stack {
-        display: grid;
-        grid-template-columns: 1fr;
-        grid-template-rows: 55px; /* Fixed height for all rows */
-        align-items: center;
+    /* THE ROW CONTAINER */
+    .row-container {
+        position: relative; /* This is the anchor for the absolute button */
+        height: 55px;
         margin-bottom: 2px;
+        width: 100%;
     }
     
-    /* 1. THE VISUAL LAYER (Underneath) */
+    /* 1. THE VISUAL LAYER (Text) */
     .trans-row {
-        grid-column: 1;
-        grid-row: 1;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -37,20 +34,24 @@ st.markdown("""
         border-bottom: 1px solid #e0e0e0;
         padding: 0 10px;
         height: 55px;
-        font-family: "Source Sans Pro", sans-serif;
-        pointer-events: none; /* Clicks pass THROUGH the text to the button */
+        width: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
         z-index: 1;
+        pointer-events: none; /* Touches pass through to the button */
+        font-family: "Source Sans Pro", sans-serif;
     }
     
-    /* Text Clarity & Alignment */
+    /* Text Clarity */
     .tr-date { 
-        width: 18%; 
+        width: 20%; 
         font-size: 0.85rem; 
-        color: #000; /* Pure black for maximum visibility */
+        color: #000; /* Bold Black */
         font-weight: 800; 
     }
     .tr-cat { 
-        width: 52%; 
+        width: 50%; 
         font-size: 0.95rem; 
         color: #222; 
         font-weight: 600; 
@@ -65,29 +66,33 @@ st.markdown("""
         text-align: right; 
     }
     
-    /* 2. THE CLICK LAYER (On Top) */
-    .button-overlay {
-        grid-column: 1;
-        grid-row: 1;
+    /* 2. THE CLICK LAYER (Button) */
+    /* We target the button specifically to be a full-size invisible sheet */
+    .row-container .stButton {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 55px;
         z-index: 5;
     }
     
-    .button-overlay button {
+    .row-container .stButton button {
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
         width: 100% !important;
         height: 55px !important;
-        cursor: pointer;
         padding: 0 !important;
         margin: 0 !important;
+        cursor: pointer;
     }
     
-    .button-overlay button:hover {
+    .row-container .stButton button:hover {
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Header Styling */
+    /* Static Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -99,7 +104,7 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    /* Style for non-history action buttons */
+    /* Style for main app buttons */
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -126,20 +131,10 @@ if not st.session_state["authenticated"]:
             st.rerun()
     st.stop()
 
-# --- DATA ENGINE ---
+# --- DATA ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def safe_float(val):
-    try:
-        if isinstance(val, (int, float)): return float(val)
-        if isinstance(val, str):
-            clean = val.replace('$', '').replace(',', '').strip()
-            return float(clean) if clean else 0.0
-        return 0.0
-    except:
-        return 0.0
-
-def load_data_robust():
+def load_data_clean():
     st.cache_data.clear()
     try:
         t_df = conn.read(worksheet="transactions", ttl=0)
@@ -148,21 +143,23 @@ def load_data_robust():
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
-            t_df["Amount"] = t_df["Amount"].apply(safe_float)
+            
+            # Simple numeric conversion
+            t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
-            t_df = t_df.dropna(subset=['Date'])
-            t_df = t_df.reset_index(drop=True)
+            t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+            
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
             c_df = pd.DataFrame(columns=["Type", "Name"])
         return t_df, c_df
-    except Exception:
+    except:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
-df_t, df_c = load_data_robust()
+df_t, df_c = load_data_clean()
 
 def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
@@ -220,7 +217,7 @@ with tab1:
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save"):
             if f_clist:
-                latest_t, _ = load_data_robust()
+                latest_t, _ = load_data_clean()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date), "Type": t_type, "Category": f_cat,
                     "Amount": float(f_amt), "User": st.session_state["user"]
@@ -260,27 +257,29 @@ with tab3:
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
-            amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
-            amt_display = f"{prefix}${amt_val:,.0f}"
+            amt_display = f"{prefix}${row['Amount']:,.0f}"
             
-            # THE STACKED ROW
+            # --- THE ABSOLUTE OVERLAY ---
+            # Container anchor
+            st.markdown('<div class="row-container">', unsafe_allow_html=True)
+            
+            # Layer 1: Visuals (pointer-events: none)
             st.markdown(f"""
-                <div class="row-stack">
-                    <div class="trans-row">
-                        <div class="tr-date">{d_str}</div>
-                        <div class="tr-cat">{icon} {row['Category']}</div>
-                        <div class="tr-amt" style="color:{price_color};">{amt_display}</div>
-                    </div>
-                    <div class="button-overlay">
+                <div class="trans-row">
+                    <div class="tr-date">{d_str}</div>
+                    <div class="tr-cat">{icon} {row['Category']}</div>
+                    <div class="tr-amt" style="color:{price_color};">{amt_display}</div>
+                </div>
             """, unsafe_allow_html=True)
             
-            if st.button(" ", key=f"h_{i}", use_container_width=True):
+            # Layer 2: Click target (styled to cover the container)
+            if st.button(" ", key=f"h_{i}"):
                 edit_dialog(i, row)
                 
-            st.markdown('</div></div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("History is empty.")
 
@@ -301,7 +300,7 @@ with st.sidebar:
         if st.form_submit_button("Add Category"):
             if cn:
                 st.cache_resource.clear()
-                _, latest_c = load_data_robust()
+                _, latest_c = load_data_clean()
                 updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c)
                 st.success("Added!")
