@@ -10,80 +10,59 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
 # CSS: Aggressive Stacking for S25 Mobile
+# We use negative margins to overlap the button and the text, 
+# then zero out Streamlit's internal element gaps.
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* 1. NUCLEAR GAP REMOVAL */
-    /* Target the main vertical block and every sub-div to kill Streamlit's auto-spacing */
+    /* 1. FORCE ZERO GAPS */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     [data-testid="stVerticalBlock"] > div { margin: 0 !important; padding: 0 !important; }
-    [data-testid="element-container"] { margin-top: 0px !important; margin-bottom: 0px !important; }
-    
-    /* 2. TAB STYLING: Bold and Sized (1.35rem) */
+    [data-testid="element-container"] { margin: 0 !important; padding: 0 !important; }
+
+    /* 2. TAB STYLING: Bold and Bold (1.35rem) */
     button[data-baseweb="tab"] p {
         font-size: 1.35rem !important; 
         font-weight: 800 !important;
     }
     
-    /* 3. THE ROW CONTAINER */
-    .row-container {
-        position: relative; 
-        height: 48px; 
-        margin-bottom: 2px; /* This is the ONLY gap between buttons */
-        width: 100%;
-        background-color: var(--secondary-background-color); 
-        border-radius: 4px;
-        overflow: hidden;
-    }
-    
-    /* VISUAL LAYER (Text) */
-    .trans-row {
-        display: flex;
-        align-items: center; 
-        justify-content: space-between;
-        background-color: transparent;
-        padding: 0 12px; 
+    /* 3. THE VISUAL ROW */
+    /* We set a fixed height of 48px and 2px margin for the gap */
+    .custom-row {
         height: 48px;
-        width: 100%;
-        position: absolute;
-        top: 0;
-        left: 0;
-        z-index: 1;
-        pointer-events: none;
+        margin-bottom: 2px; /* This creates the 2px space Ethan wants */
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        background-color: var(--secondary-background-color);
+        border-radius: 6px;
         font-family: "Source Sans Pro", sans-serif;
+        position: relative;
+        z-index: 1;
     }
     
     .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; opacity: 0.8; }
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* CLICK LAYER (Invisible Button Overlay) */
-    .row-container .stButton {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 48px;
-        z-index: 5;
-    }
-    
-    .row-container .stButton button {
+    /* 4. THE INVISIBLE BUTTON OVERLAY */
+    /* We move the button UP by 48px (the height of the row) to overlap it perfectly */
+    div.stButton > button {
+        height: 48px !important;
+        margin-top: -50px !important; /* Overlap the row (48px) + account for margin */
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
         width: 100% !important;
-        height: 48px !important;
-        padding: 0 !important;
-        margin: 0 !important;
         display: block !important;
-        cursor: pointer;
+        z-index: 5;
+        position: relative;
     }
     
-    .row-container .stButton button:hover {
+    div.stButton > button:hover {
         background-color: rgba(128,128,128,0.1) !important;
     }
     
@@ -97,6 +76,7 @@ st.markdown("""
         font-weight: 800;
         text-transform: uppercase;
         margin-bottom: 8px;
+        margin-top: 10px;
     }
 
     /* General Cleanups */
@@ -249,11 +229,8 @@ with tab3:
 
         with st.expander("🔍 Filter View"):
             c1, c2 = st.columns(2)
-            with c1:
-                start_f = st.date_input("From", first_day)
-            with c2:
-                end_f = st.date_input("To", last_day)
-            
+            with c1: start_f = st.date_input("From", first_day)
+            with c2: end_f = st.date_input("To", last_day)
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
@@ -276,8 +253,7 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
-        # history container to enforce zero gap
-        st.markdown('<div class="history-list">', unsafe_allow_html=True)
+        # history list
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
@@ -287,18 +263,18 @@ with tab3:
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
             
-            st.markdown('<div class="row-container">', unsafe_allow_html=True)
+            # Row Text
             st.markdown(f"""
-                <div class="trans-row">
+                <div class="custom-row">
                     <div class="tr-date"><span>{d_str}</span></div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
                     <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
+            
+            # Button (moved up over the row)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
-            st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
     else: st.info("No data yet.")
 
 with st.sidebar:
