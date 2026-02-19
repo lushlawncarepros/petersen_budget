@@ -343,7 +343,19 @@ with tab_budget:
     actuals = t_month.groupby('Category')['Amount'].sum().to_dict()
     
     b_month = df_b[df_b['Month'] == month_str] if not df_b.empty else pd.DataFrame(columns=["Month", "Category", "Amount"])
-    planned = b_month.set_index('Category')['Amount'].to_dict() if not b_month.empty else {}
+    
+    # 🌟 NEW LOGIC: BUDGET ROLLOVER
+    if b_month.empty and not df_b.empty:
+        valid_months = df_b['Month'].dropna().astype(str).tolist()
+        if valid_months:
+            recent_month = max(valid_months)  # YYYY-MM format sorts chronologically natively
+            recent_b = df_b[df_b['Month'] == recent_month]
+            planned = recent_b.set_index('Category')['Amount'].to_dict()
+            st.info(f"💡 **New Month!** Pre-filled with budget data from **{recent_month}**. Click 'Save Budget Planner' below to lock it in.")
+        else:
+            planned = {}
+    else:
+        planned = b_month.set_index('Category')['Amount'].to_dict() if not b_month.empty else {}
     
     # Calculate global Net Totals (Ignoring headers)
     tot_inc_p = sum(float(planned.get(c, 0.0)) for c in df_c[df_c["Type"] == "Income"]["Name"])
@@ -366,6 +378,25 @@ with tab_budget:
     }
 
     all_budget_edits = []
+    
+    # 🌟 NEW LOGIC: CONDITIONAL ROW COLORING
+    def highlight_actual_diff(row):
+        styles = [''] * len(row)
+        try:
+            diff = float(row['Diff'])
+            color = ''
+            
+            # Since Diff math handles Income vs Expense natively 
+            # (Positive Diff is always good, Negative Diff is always bad)
+            if diff > 0: color = 'color: #2e7d32; font-weight: 600;' # Green
+            elif diff < 0: color = 'color: #d32f2f; font-weight: 600;' # Red
+            
+            if color:
+                styles[row.index.get_loc('Actual')] = color
+                styles[row.index.get_loc('Diff')] = color
+        except Exception:
+            pass
+        return styles
 
     def render_budget_section(base_type, icon):
         st.markdown(f"### {icon} {base_type.upper()}")
@@ -389,7 +420,11 @@ with tab_budget:
                     data.append({"Order": o, "Category": c, "Planned": p, "Actual": a, "Diff": diff})
                 
                 df_to_edit = pd.DataFrame(data)
-                ed = st.data_editor(df_to_edit, hide_index=True, column_config=col_config, use_container_width=True, key=f"ed_{base_type}_{idx}_{month_str}")
+                
+                # Apply Text Styling directly to the Dataframe rendering
+                styled_df = df_to_edit.style.apply(highlight_actual_diff, axis=1)
+                
+                ed = st.data_editor(styled_df, hide_index=True, column_config=col_config, use_container_width=True, key=f"ed_{base_type}_{idx}_{month_str}")
                 all_budget_edits.append(ed)
                 current_cats.clear()
                 return idx + 1
