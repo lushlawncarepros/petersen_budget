@@ -492,6 +492,7 @@ with tab_budget:
             h_order = sc1.number_input("Sort Order", value=1, step=1, help="Place amongst categories")
             h_color = sc2.color_picker("Background Color", "#4682B4")
             
+            st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
             if st.form_submit_button("Add Heading", use_container_width=True):
                 if h_name:
                     new_h = pd.DataFrame([{"Type": f"{h_type} Header", "Name": h_name, "Order": h_order, "Color": h_color}])
