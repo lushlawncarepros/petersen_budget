@@ -8,7 +8,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Absolute Overlay for perfect alignment
+# CSS: Perfectly Aligned Stacked Mobile Ledger
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -17,33 +17,34 @@ st.markdown("""
     /* Remove vertical gaps between rows */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
-    /* THE ROW CONTAINER */
-    .row-container {
-        position: relative; /* This is the anchor for the absolute button */
-        height: 55px;
+    /* THE STACK CONTAINER - Forces layers to occupy the exact same space */
+    .row-stack {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-rows: 60px; /* Fixed height for every row */
+        align-items: center;
         margin-bottom: 2px;
-        width: 100%;
+        position: relative;
     }
     
-    /* 1. THE VISUAL LAYER (Text) */
+    /* 1. THE VISUAL LAYER (Underneath) */
     .trans-row {
+        grid-column: 1;
+        grid-row: 1;
         display: flex;
         align-items: center;
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #e0e0e0;
-        padding: 0 10px;
-        height: 55px;
+        padding: 0 12px;
+        height: 60px;
         width: 100%;
-        position: absolute;
-        top: 0;
-        left: 0;
         z-index: 1;
         pointer-events: none; /* Touches pass through to the button */
         font-family: "Source Sans Pro", sans-serif;
     }
     
-    /* Text Clarity */
+    /* Text Visibility */
     .tr-date { 
         width: 20%; 
         font-size: 0.85rem; 
@@ -66,37 +67,37 @@ st.markdown("""
         text-align: right; 
     }
     
-    /* 2. THE CLICK LAYER (Button) */
-    /* We target the button specifically to be a full-size invisible sheet */
-    .row-container .stButton {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 55px;
+    /* 2. THE CLICK LAYER (On Top) */
+    .button-overlay {
+        grid-column: 1;
+        grid-row: 1;
         z-index: 5;
+        height: 60px;
+        width: 100%;
     }
     
-    .row-container .stButton button {
+    /* Make the Streamlit button container fill the stack */
+    .button-overlay div[data-testid="stButton"], 
+    .button-overlay div[data-testid="stButton"] button {
+        width: 100% !important;
+        height: 60px !important;
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
-        width: 100% !important;
-        height: 55px !important;
         padding: 0 !important;
         margin: 0 !important;
-        cursor: pointer;
+        display: block !important;
     }
     
-    .row-container .stButton button:hover {
+    .button-overlay button:hover {
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Static Header */
+    /* Header Styling */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 10px;
+        padding: 10px 12px;
         border-bottom: 2px solid #333;
         color: #444;
         font-size: 0.75rem;
@@ -104,7 +105,7 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    /* Style for main app buttons */
+    /* Style for non-history action buttons */
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -144,7 +145,7 @@ def load_data_clean():
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
             
-            # Simple numeric conversion
+            # Pure numeric conversion for your clean CSV
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
@@ -175,6 +176,7 @@ def get_icon(cat_name, row_type):
     if "alesa" in n: return "👩"
     return "💸" if row_type == "Expense" else "💰"
 
+# --- EDITOR DIALOG ---
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
@@ -204,6 +206,7 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
+# --- MAIN APP ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
@@ -251,10 +254,13 @@ with tab3:
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
+        
+        # Static Header
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
+            
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
             icon = get_icon(row['Category'], row['Type'])
@@ -262,27 +268,28 @@ with tab3:
             prefix = "-" if is_ex else "+"
             amt_display = f"{prefix}${row['Amount']:,.0f}"
             
-            # --- THE ABSOLUTE OVERLAY ---
-            # Container anchor
-            st.markdown('<div class="row-container">', unsafe_allow_html=True)
-            
-            # Layer 1: Visuals (pointer-events: none)
-            st.markdown(f"""
-                <div class="trans-row">
-                    <div class="tr-date">{d_str}</div>
-                    <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{price_color};">{amt_display}</div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # Layer 2: Click target (styled to cover the container)
-            if st.button(" ", key=f"h_{i}"):
-                edit_dialog(i, row)
+            # --- THE GRID STACK ---
+            # Using st.container to ensure they are grouped
+            with st.container():
+                st.markdown(f"""
+                    <div class="row-stack">
+                        <div class="trans-row">
+                            <div class="tr-date">{d_str}</div>
+                            <div class="tr-cat">{icon} {row['Category']}</div>
+                            <div class="tr-amt" style="color:{price_color};">{amt_display}</div>
+                        </div>
+                        <div class="button-overlay">
+                """, unsafe_allow_html=True)
                 
-            st.markdown('</div>', unsafe_allow_html=True)
+                # The actual button
+                if st.button(" ", key=f"h_{i}"):
+                    edit_dialog(i, row)
+                    
+                st.markdown('</div></div>', unsafe_allow_html=True)
     else:
         st.info("History is empty.")
 
+# --- SIDEBAR ---
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
     if st.button("🔄 Force Sync"):
