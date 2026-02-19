@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Vertical Alignment Fixes (Colors handled by config.toml)
+# CSS: High-Contrast Layout with Seamless Stacked Transactions
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -28,7 +28,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 60px; 
-        margin-bottom: 2px;
+        margin-bottom: 0px; /* Removed 2px gap to stack perfectly */
         width: 100%;
         background-color: transparent; 
     }
@@ -39,8 +39,8 @@ st.markdown("""
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-        /* 20px bottom padding shifts text up for perfect vertical balance on S25 */
+        border-bottom: none; /* Removed the separating line */
+        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -57,7 +57,7 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. THE CLICK LAYER (Button Overlay) */
+    /* 2. THE CLICK LAYER (Seamless Button Overlay) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -71,6 +71,8 @@ st.markdown("""
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
+        box-shadow: none !important; /* Ensure no shadows show */
+        outline: none !important; /* Ensure no focus outlines show */
         width: 100% !important;
         height: 60px !important;
         padding: 0 !important;
@@ -80,10 +82,10 @@ st.markdown("""
     }
     
     .row-container .stButton button:hover {
-        background-color: rgba(128,128,128,0.1) !important;
+        background-color: rgba(128,128,128,0.05) !important;
     }
     
-    /* Ledger Header - Refined Size */
+    /* Ledger Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
