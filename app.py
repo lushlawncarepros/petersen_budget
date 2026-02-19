@@ -9,20 +9,20 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast "Nailed It" Layout
+# CSS: High-Contrast Layout with Tight Row Spacing
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove vertical gaps between rows */
+    /* Remove vertical gaps between block elements */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* THE ROW CONTAINER */
     .row-container {
         position: relative; 
-        height: 60px; /* Restored to 60px */
-        margin-bottom: 2px;
+        height: 60px; 
+        margin-bottom: 0px; /* Removed gap between rows */
         width: 100%;
     }
     
@@ -32,7 +32,7 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         background-color: white;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid #e0e0e0; /* Clean dividing line */
         padding: 0 10px;
         height: 60px;
         width: 100%;
@@ -40,15 +40,15 @@ st.markdown("""
         top: 0;
         left: 0;
         z-index: 1;
-        pointer-events: none; /* Touches pass through to the button underneath */
+        pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
     }
     
-    /* Darkened Date Text for high visibility */
+    /* Darkened Date Text */
     .tr-date { 
         width: 20%; 
         font-size: 0.85rem; 
-        color: #111; /* Solid Black */
+        color: #111; 
         font-weight: 700; 
     }
     .tr-cat { 
@@ -103,12 +103,13 @@ st.markdown("""
         font-size: 0.75rem;
         font-weight: 800;
         text-transform: uppercase;
+        background-color: white;
     }
 
-    /* Polish for main app buttons */
+    /* Style for main app buttons */
     .stButton>button { border-radius: 12px; }
     
-    /* Popover Scaling */
+    /* Popover Styling */
     div[data-testid="stPopover"] { width: 100%; margin-top: 10px; }
     div[data-testid="stCheckbox"] { margin-bottom: 8px !important; }
     </style>
@@ -247,17 +248,16 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else: st.info("No data yet.")
+    else:
+        st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
-        # Default Month Range
         today = date.today()
         first_day = today.replace(day=1)
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
         with st.expander("🔍 Filter History", expanded=False):
-            # Restored to DEFAULT stacking/spacing
             c1, c2 = st.columns(2)
             with c1:
                 start_f = st.date_input("From", first_day)
@@ -303,7 +303,6 @@ with tab3:
                     <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
-            # Standard invisible button
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
