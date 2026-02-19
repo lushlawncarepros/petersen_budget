@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Exact Measurements
+# CSS: Exact measurements with updated Filter spacing
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -100,8 +100,12 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* General UI Tweaks - Space added here */
-    div[data-testid="stPopover"] { width: 100%; margin-top: 30px !important; }
+    /* General UI Tweaks - Filter spacing updated here */
+    div[data-testid="stPopover"] { 
+        width: 100%; 
+        margin-top: 15px !important; 
+        margin-bottom: 15px !important; 
+    }
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -251,8 +255,8 @@ with tab3:
 
         with st.expander("🔍 Filter View"):
             c1, c2 = st.columns(2)
-            with c1: start_f = st.date_input("From", start_f if 'start_f' in locals() else first_day)
-            with c2: end_f = st.date_input("To", end_f if 'end_f' in locals() else last_day)
+            with c1: start_f = st.date_input("From", first_day)
+            with c2: end_f = st.date_input("To", last_day)
             
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
