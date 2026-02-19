@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Theme-Aware Colors
+# CSS: High-Contrast Layout with Fully Transparent/Theme-Aware Rows
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -30,8 +30,7 @@ st.markdown("""
         height: 60px; 
         margin-bottom: 2px;
         width: 100%;
-        /* Use dynamic background for theme compatibility */
-        background-color: var(--background-color); 
+        background-color: transparent; /* Changed to transparent */
     }
     
     /* 1. VISUAL LAYER (Text) */
@@ -39,10 +38,9 @@ st.markdown("""
         display: flex;
         align-items: center; 
         justify-content: space-between;
-        /* Dynamic colors so it works in Dark Mode */
-        background-color: var(--background-color);
-        border-bottom: 1px solid var(--secondary-background-color);
-        /* 20px bottom padding for perfect vertical balance on S25 */
+        background-color: transparent; /* Changed to transparent to follow theme */
+        border-bottom: 1px solid rgba(128, 128, 128, 0.2); /* Faint line for both modes */
+        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -53,11 +51,11 @@ st.markdown("""
         pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
         overflow: hidden;
-        color: var(--text-color);
+        color: inherit; /* Inherit text color from Streamlit theme */
     }
     
-    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; color: var(--text-color); }
-    .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
+    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; opacity: 0.9; }
+    .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
     /* 2. THE CLICK LAYER (Button Overlay) */
@@ -83,7 +81,7 @@ st.markdown("""
     }
     
     .row-container .stButton button:hover {
-        background-color: rgba(128,128,128,0.1) !important;
+        background-color: rgba(128,128,128,0.05) !important;
     }
     
     /* Ledger Header */
@@ -91,12 +89,11 @@ st.markdown("""
         display: flex;
         justify-content: space-between;
         padding: 10px;
-        border-bottom: 2px solid var(--secondary-background-color); 
-        color: var(--text-color);
+        border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
         font-size: 1.0rem; 
         font-weight: 800;
         text-transform: uppercase;
-        background-color: var(--background-color);
+        background-color: transparent;
     }
 
     /* --- FILTER UI SPACING --- */
@@ -289,7 +286,6 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
-        # Wrapped the whole loop in a theme-aware container
         st.markdown('<div style="width:100%;">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
