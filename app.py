@@ -7,7 +7,7 @@ import time
 from streamlit_gsheets import GSheetsConnection
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
+st.set_page_config(page_title="Petersen Family Budget", page_icon="💰", layout="centered")
 
 # CSS: High-Contrast Layout with Exact Measurements
 st.markdown("""
