@@ -15,8 +15,19 @@ st.markdown("""
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove vertical gaps between block elements */
+    /* 1. AGGRESSIVE GAP REMOVAL */
+    /* This targets the invisible wrappers Streamlit puts around every button/text block */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
+    [data-testid="stVerticalBlock"] > div { 
+        margin-top: 0px !important; 
+        margin-bottom: 0px !important; 
+        padding-top: 0px !important; 
+        padding-bottom: 0px !important; 
+    }
+    [data-testid="element-container"] {
+        margin-top: 0px !important;
+        margin-bottom: 0px !important;
+    }
     
     /* --- TAB STYLING --- */
     button[data-baseweb="tab"] p {
@@ -27,11 +38,12 @@ st.markdown("""
     /* THE ROW CONTAINER */
     .row-container {
         position: relative; 
-        height: 48px; /* Slimmer height for stacking */
-        margin-bottom: 2px; /* The 2px gap you requested */
+        height: 48px; 
+        margin-bottom: 2px; /* This is the ONLY gap between buttons now */
         width: 100%;
-        background-color: var(--secondary-background-color); /* Slight tint to see the rows */
+        background-color: var(--secondary-background-color); 
         border-radius: 4px;
+        overflow: hidden;
     }
     
     /* 1. VISUAL LAYER (Text) */
@@ -49,7 +61,6 @@ st.markdown("""
         z-index: 1;
         pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
-        overflow: hidden;
     }
     
     .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; opacity: 0.8; }
@@ -93,7 +104,7 @@ st.markdown("""
         font-size: 1.0rem; 
         font-weight: 800;
         text-transform: uppercase;
-        margin-bottom: 4px;
+        margin-bottom: 8px;
     }
 
     /* --- FILTER UI SPACING --- */
@@ -281,7 +292,8 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
-        st.markdown('<div style="width:100%;">', unsafe_allow_html=True)
+        # This div wrapper helps us target the spacing specifically for the history list
+        st.markdown('<div class="history-list">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
