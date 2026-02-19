@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Layout with Restored Header and Enhanced Focus-Select Script
+# CSS: High-Contrast Layout with Exact Measurements
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -24,12 +24,11 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* Ledger Header - RESTORED TO ORIGINAL */
+    /* Ledger Header - LINE REMOVED */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
-        border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
         font-size: 1.0rem; 
         font-weight: 800;
         text-transform: uppercase;
@@ -106,32 +105,7 @@ st.markdown("""
         margin-bottom: 15px !important; 
     }
     .stButton>button { border-radius: 12px; }
-
-    /* Decoy CSS to hide the focus stealer */
-    .decoy-focus {
-        height: 0; width: 0; opacity: 0; position: absolute;
-    }
     </style>
-
-    <script>
-    // Enhanced Script to auto-select text when tapping an input (Manage Entry fix)
-    function applySelectionLogic() {
-        const inputs = document.querySelectorAll('input');
-        inputs.forEach(input => {
-            if (!input.dataset.hasSelectListener) {
-                // Listen for both focus and click to ensure mobile triggers highlight
-                const selectAll = () => {
-                    setTimeout(() => input.setSelectionRange(0, input.value.length), 10);
-                };
-                input.addEventListener('focus', selectAll);
-                input.addEventListener('mouseup', (e) => { e.preventDefault(); selectAll(); }, {once: false});
-                input.dataset.hasSelectListener = 'true';
-            }
-        });
-    }
-    // Poll to catch dynamically created dialog inputs
-    setInterval(applySelectionLogic, 500);
-    </script>
     """, unsafe_allow_html=True)
 
 # --- AUTHENTICATION ---
@@ -201,8 +175,6 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
-    # Hide decoy to steal initial focus from date picker
-    st.markdown('<div class="decoy-focus"><button nonce="decoy"></button></div>', unsafe_allow_html=True)
     st.write(f"Editing: **{row_data['Category']}**")
     
     e_date = st.date_input("Date", row_data["Date"])
@@ -210,10 +182,10 @@ def edit_dialog(row_index, row_data):
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     
-    # Text input for easier mobile UX (enhanced by script above to select-all on tap)
-    e_amt_str = st.text_input("Amount ($)", value=f"{float(row_data['Amount']):.2f}")
+    # Restored to original number_input
+    e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
-    # 30px Buffer requested
+    # 30px Buffer
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -221,7 +193,7 @@ def edit_dialog(row_index, row_data):
         if st.button("✅ Update", use_container_width=True):
             df_t.at[row_index, "Date"] = pd.to_datetime(e_date)
             df_t.at[row_index, "Category"] = e_cat
-            df_t.at[row_index, "Amount"] = safe_float(e_amt_str)
+            df_t.at[row_index, "Amount"] = e_amt
             df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
             conn.update(worksheet="transactions", data=df_t)
             st.success("Updated!")
@@ -309,7 +281,6 @@ with tab3:
             st.markdown(f"**Filtered Net:** `${f_net:,.2f}`")
 
         work_df = work_df.sort_values(by="Date", ascending=False)
-        # Restore header HTML
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
