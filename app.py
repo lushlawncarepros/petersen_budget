@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Refined Header and Shifting Text
+# CSS: High-Contrast Layout with Color-Coded Category Checkboxes
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -77,14 +77,14 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Ledger Header - Adjusted font size and removed line */
+    /* Ledger Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
-        border-bottom: 2px solid #eee; /* Light baseline only */
+        border-bottom: 2px solid #eee; 
         color: #111;
-        font-size: 1.1rem; /* Reduced by 25% from 1.5rem */
+        font-size: 1.1rem; 
         font-weight: 800;
         text-transform: uppercase;
         background-color: white;
@@ -102,12 +102,16 @@ st.markdown("""
         padding-top: 5px !important;
     }
     
-    /* Custom Checkbox Colors */
-    .income-filter div[data-testid="stCheckbox"] input:checked ~ div {
+    /* CUSTOM CHECKBOX COLORS (AGGRESSIVE TARGETING) */
+    
+    /* INCOME = GREEN when checked */
+    .income-filter [data-testid="stCheckbox"] input:checked + div {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
     }
-    .expense-filter div[data-testid="stCheckbox"] input:checked ~ div {
+    
+    /* EXPENSE = RED when checked */
+    .expense-filter [data-testid="stCheckbox"] input:checked + div {
         background-color: #d32f2f !important;
         border-color: #d32f2f !important;
     }
@@ -266,20 +270,20 @@ with tab3:
                 end_f = st.date_input("To", last_day)
             
             with st.popover("Select Categories"):
-                # Income Section
+                # Wrap income section in a specific class for CSS
                 st.markdown('<div class="income-filter">', unsafe_allow_html=True)
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
-                sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"filter_inc_{cat}")]
+                sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
                 st.markdown('</div>', unsafe_allow_html=True)
                 
                 st.divider()
                 
-                # Expense Section
+                # Wrap expense section in a specific class for CSS
                 st.markdown('<div class="expense-filter">', unsafe_allow_html=True)
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
-                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"filter_exp_{cat}")]
+                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
                 st.markdown('</div>', unsafe_allow_html=True)
                 
                 all_selected = sel_inc + sel_exp
