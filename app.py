@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: 30px Row Height with 20px Bottom Padding on Buttons
+# CSS: Compact 30px Row Height with 0px Text Bottom Padding
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -37,13 +37,14 @@ st.markdown("""
         overflow: hidden;
     }
     
-    /* VISUAL LAYER (Text) */
+    /* VISUAL LAYER (Text) - 0px Bottom Padding */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
-        padding: 0 12px; 
+        /* Padding set to 0px top/bottom as requested */
+        padding: 0px 12px !important; 
         height: 30px;
         width: 100%;
         position: absolute;
@@ -58,7 +59,7 @@ st.markdown("""
     .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
     
-    /* 4. THE BUTTON OVERLAY (Set with 20px bottom padding) */
+    /* 4. THE BUTTON OVERLAY (20px bottom padding maintained) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -68,11 +69,9 @@ st.markdown("""
     }
     
     .row-container .stButton button {
-        /* Set padding as requested */
         padding-top: 0px !important;
         padding-bottom: 20px !important; 
         
-        /* Reset and Hide Defaults */
         height: auto !important;
         min-height: 0px !important;
         background-color: transparent !important;
