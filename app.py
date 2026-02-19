@@ -160,16 +160,17 @@ def load_data_clean():
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"])
         
-        # Categories Clean (Now initializes 'Order')
+        # Categories Clean (Now initializes 'Order' and 'Color')
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
-            for col in ["Type", "Name", "Order"]:
+            for col in ["Type", "Name", "Order", "Color"]:
                 if col not in c_df.columns: 
                     if col == "Order": c_df[col] = 10
+                    elif col == "Color": c_df[col] = "#4682B4"
                     else: c_df[col] = ""
             c_df["Order"] = pd.to_numeric(c_df["Order"], errors='coerce').fillna(10)
         else:
-            c_df = pd.DataFrame(columns=["Type", "Name", "Order"])
+            c_df = pd.DataFrame(columns=["Type", "Name", "Order", "Color"])
             
         # Budgets Clean
         try:
@@ -184,7 +185,7 @@ def load_data_clean():
         except: b_df = pd.DataFrame(columns=["Month", "Category", "Amount"])
             
         return t_df, c_df, b_df
-    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name", "Order"]), pd.DataFrame(columns=["Month", "Category", "Amount"])
+    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name", "Order", "Color"]), pd.DataFrame(columns=["Month", "Category", "Amount"])
 
 df_t, df_c, df_b = load_data_clean()
 
@@ -203,9 +204,10 @@ def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}** &nbsp; | &nbsp; Entry Created by: **{row_data.get('User', 'Unknown')}**")
     
     e_date = st.date_input("Date", row_data["Date"])
-    # Sort dropdown by Order
-    cat_df_sorted = df_c[df_c["Type"] == row_data["Type"]].sort_values(by=["Order", "Name"])
-    cat_list = cat_df_sorted["Name"].tolist()
+    
+    # Sort dropdown by Order (Filter out Headers!)
+    valid_cats = df_c[df_c["Type"] == row_data["Type"]].sort_values(by=["Order", "Name"])
+    cat_list = valid_cats["Name"].tolist()
     
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
@@ -249,11 +251,13 @@ def manage_cat_dialog(old_name, cat_type):
     with c1:
         if st.button("💾 Save Changes", use_container_width=True):
             if new_name and (new_name != old_name or new_type != cat_type):
+                # 1. Update Category List
                 mask_c = (df_c["Type"] == cat_type) & (df_c["Name"] == old_name)
                 df_c.loc[mask_c, "Name"] = new_name
                 df_c.loc[mask_c, "Type"] = new_type
                 conn.update(worksheet="categories", data=df_c)
                 
+                # 2. Sync existing transactions
                 mask_t = (df_t["Category"] == old_name)
                 df_t.loc[mask_t, "Category"] = new_name
                 df_t.loc[mask_t, "Type"] = new_type
@@ -295,9 +299,9 @@ with tab1:
     with st.form("entry_form", clear_on_submit=True):
         f_date = st.date_input("Date", datetime.now())
         
-        # Sort Categories by Order
-        cat_df_sorted = df_c[df_c["Type"] == t_type].sort_values(by=["Order", "Name"])
-        f_cats = cat_df_sorted["Name"].tolist()
+        # Sort Categories by Order, EXCLUDING Headers
+        valid_cats = df_c[df_c["Type"] == t_type].sort_values(by=["Order", "Name"])
+        f_cats = valid_cats["Name"].tolist()
         
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
         f_memo = st.text_input("Memo", placeholder="Optional details")
@@ -320,7 +324,7 @@ with tab1:
             elif f_amt is None: st.error("Please enter an amount.")
             else: st.error("Please add a category first!")
 
-# --- BUDGET TAB (Profit & Loss Style with Manual Sorting) ---
+# --- BUDGET TAB (Profit & Loss Style with Custom Centered Headings) ---
 with tab_budget:
     st.subheader("Monthly Budget Planner")
     
@@ -341,29 +345,11 @@ with tab_budget:
     b_month = df_b[df_b['Month'] == month_str] if not df_b.empty else pd.DataFrame(columns=["Month", "Category", "Amount"])
     planned = b_month.set_index('Category')['Amount'].to_dict() if not b_month.empty else {}
     
-    def build_budget_df(cat_type):
-        cat_subset = df_c[df_c["Type"] == cat_type]
-        data = []
-        for _, r in cat_subset.iterrows():
-            c = r["Name"]
-            o = r["Order"]
-            p = float(planned.get(c, 0.0))
-            a = float(actuals.get(c, 0.0))
-            diff = float(a - p) if cat_type == "Income" else float(p - a)
-            data.append({"Order": o, "Category": c, "Planned": p, "Actual": a, "Diff": diff})
-        
-        res_df = pd.DataFrame(data)
-        if not res_df.empty:
-            res_df = res_df.sort_values(by=["Order", "Category"])
-        return res_df
-
-    inc_b_df = build_budget_df("Income")
-    exp_b_df = build_budget_df("Expense")
-    
-    tot_inc_p = inc_b_df["Planned"].sum() if not inc_b_df.empty else 0
-    tot_inc_a = inc_b_df["Actual"].sum() if not inc_b_df.empty else 0
-    tot_exp_p = exp_b_df["Planned"].sum() if not exp_b_df.empty else 0
-    tot_exp_a = exp_b_df["Actual"].sum() if not exp_b_df.empty else 0
+    # Calculate global Net Totals (Ignoring headers)
+    tot_inc_p = sum(float(planned.get(c, 0.0)) for c in df_c[df_c["Type"] == "Income"]["Name"])
+    tot_inc_a = sum(float(actuals.get(c, 0.0)) for c in df_c[df_c["Type"] == "Income"]["Name"])
+    tot_exp_p = sum(float(planned.get(c, 0.0)) for c in df_c[df_c["Type"] == "Expense"]["Name"])
+    tot_exp_a = sum(float(actuals.get(c, 0.0)) for c in df_c[df_c["Type"] == "Expense"]["Name"])
     
     st.markdown("### Net Balance")
     nc1, nc2, nc3 = st.columns(3)
@@ -371,7 +357,6 @@ with tab_budget:
     nc2.metric("Actual Net", f"${tot_inc_a - tot_exp_a:,.0f}")
     nc3.metric("Variance", f"${(tot_inc_a - tot_exp_a) - (tot_inc_p - tot_exp_p):,.0f}")
     
-    # New Config includes editable "Order"
     col_config = {
         "Order": st.column_config.NumberColumn("Sort", step=1, help="Lower numbers appear first"),
         "Category": st.column_config.TextColumn("Category", disabled=True),
@@ -380,28 +365,69 @@ with tab_budget:
         "Diff": st.column_config.NumberColumn("Diff", format="%.2f", disabled=True)
     }
 
-    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
-    st.markdown("**💰 INCOME**")
-    ed_inc = st.data_editor(inc_b_df, hide_index=True, column_config=col_config, use_container_width=True, key=f"inc_{month_str}")
-    
-    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
-    st.markdown("**💸 EXPENSES**")
-    ed_exp = st.data_editor(exp_b_df, hide_index=True, column_config=col_config, use_container_width=True, key=f"exp_{month_str}")
+    all_budget_edits = []
+
+    def render_budget_section(base_type, icon):
+        st.markdown(f"### {icon} {base_type.upper()}")
+        
+        # Pull ALL items for this section (Categories AND Headers)
+        items = df_c[df_c["Type"].isin([base_type, f"{base_type} Header"])].sort_values(by=["Order", "Name"])
+        
+        current_cats = []
+        editor_idx = 0
+        
+        # Helper to flush collected categories into a data_editor before printing a header
+        def flush_cats(idx):
+            if current_cats:
+                data = []
+                for item in current_cats:
+                    c = item["Name"]
+                    o = item["Order"]
+                    p = float(planned.get(c, 0.0))
+                    a = float(actuals.get(c, 0.0))
+                    diff = float(a - p) if base_type == "Income" else float(p - a)
+                    data.append({"Order": o, "Category": c, "Planned": p, "Actual": a, "Diff": diff})
+                
+                df_to_edit = pd.DataFrame(data)
+                ed = st.data_editor(df_to_edit, hide_index=True, column_config=col_config, use_container_width=True, key=f"ed_{base_type}_{idx}_{month_str}")
+                all_budget_edits.append(ed)
+                current_cats.clear()
+                return idx + 1
+            return idx
+
+        # Loop through items in order. Break tables apart when a heading is found.
+        for _, item in items.iterrows():
+            if item["Type"] == f"{base_type} Header":
+                editor_idx = flush_cats(editor_idx) # Render what we have so far
+                
+                # Render the Custom Full-Row Heading!
+                st.markdown(f"""
+                    <div style='background-color:{item['Color']}; color:#ffffff; text-align:center; 
+                    padding:8px; border-radius:6px; font-weight:800; font-size:1.1rem; 
+                    margin-top:10px; margin-bottom:10px; text-shadow: 1px 1px 2px rgba(0,0,0,0.4);'>
+                        {item['Name']}
+                    </div>
+                """, unsafe_allow_html=True)
+            else:
+                current_cats.append(item)
+                
+        flush_cats(editor_idx) # Render anything left over at the end
+        st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+
+    render_budget_section("Income", "💰")
+    render_budget_section("Expense", "💸")
 
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     if st.button("💾 Save Budget Planner", use_container_width=True):
         new_b = []
-        updated_c = df_c.copy() # Track sorting changes
+        updated_c = df_c.copy()
         
-        if not ed_inc.empty:
-            for _, r in ed_inc.iterrows(): 
-                new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
-                updated_c.loc[updated_c["Name"] == r["Category"], "Order"] = r["Order"]
-        if not ed_exp.empty:
-            for _, r in ed_exp.iterrows(): 
-                new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
-                updated_c.loc[updated_c["Name"] == r["Category"], "Order"] = r["Order"]
-                
+        for ed_df in all_budget_edits:
+            if not ed_df.empty:
+                for _, r in ed_df.iterrows(): 
+                    new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
+                    updated_c.loc[updated_c["Name"] == r["Category"], "Order"] = r["Order"]
+                    
         new_b_df = pd.DataFrame(new_b)
         
         if df_b.empty:
@@ -411,11 +437,49 @@ with tab_budget:
             updated_b = pd.concat([latest_b, new_b_df], ignore_index=True)
             
         conn.update(worksheet="budgets", data=updated_b)
-        conn.update(worksheet="categories", data=updated_c) # Push sort orders
-        
-        st.success(f"Budget and Category Orders saved for {selected_month} {selected_year}!")
+        conn.update(worksheet="categories", data=updated_c) 
+        st.success(f"Budget & Ordering saved for {selected_month} {selected_year}!")
         time.sleep(1)
         st.rerun()
+
+    # --- UI for Adding/Managing Custom Headings ---
+    st.divider()
+    st.markdown("### 🏷️ Manage Budget Headings")
+    hc1, hc2 = st.columns(2)
+    
+    with hc1:
+        st.markdown("**Create New Heading**")
+        with st.form("add_heading_form", clear_on_submit=True):
+            h_type = st.radio("Section", ["Expense", "Income"], horizontal=True)
+            h_name = st.text_input("Heading Text", placeholder="e.g. Fixed Expenses")
+            
+            sc1, sc2 = st.columns(2)
+            h_order = sc1.number_input("Sort Order", value=1, step=1, help="Place amongst categories")
+            h_color = sc2.color_picker("Background Color", "#4682B4")
+            
+            if st.form_submit_button("Add Heading", use_container_width=True):
+                if h_name:
+                    new_h = pd.DataFrame([{"Type": f"{h_type} Header", "Name": h_name, "Order": h_order, "Color": h_color}])
+                    updated_c = pd.concat([df_c, new_h], ignore_index=True)
+                    conn.update(worksheet="categories", data=updated_c)
+                    st.success("Heading Added!")
+                    time.sleep(1)
+                    st.rerun()
+                    
+    with hc2:
+        st.markdown("**Existing Headings**")
+        headers = df_c[df_c["Type"].str.contains("Header")]
+        if headers.empty:
+            st.caption("No headings yet.")
+        else:
+            for _, r in headers.iterrows():
+                cc1, cc2 = st.columns([4, 1])
+                # Visual preview of the heading
+                cc1.markdown(f"<div style='background-color:{r['Color']}; color:#fff; text-align:center; padding:4px; border-radius:4px; font-weight:bold; font-size:0.85rem;'>{r['Name']} (Order: {r['Order']})</div>", unsafe_allow_html=True)
+                if cc2.button("🗑️", key=f"del_h_{r['Name']}"):
+                    new_c = df_c[df_c["Name"] != r["Name"]]
+                    conn.update(worksheet="categories", data=new_c)
+                    st.rerun()
 
 with tab2:
     if not df_t.empty:
@@ -449,7 +513,6 @@ with tab3:
             with c2: end_f = st.date_input("To", last_day)
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
-                # Sort filter options
                 inc_df = df_c[df_c["Type"] == "Income"].sort_values(by=["Order", "Name"])
                 sel_inc = [cat for cat in inc_df["Name"] if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
                 
