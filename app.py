@@ -9,20 +9,21 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Precision Mobile Layout
+# CSS: Ultra-Compact Ledger & Forced Mobile Grid
 st.markdown("""
     <style>
-    /* 1. GLOBAL & BLOCK TWEAKS */
+    /* 1. GLOBAL UI */
     div[data-testid="stSidebarNav"] { display: none; }
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    .stButton>button { border-radius: 10px; }
+    .stButton>button { border-radius: 4px; }
 
-    /* 2. TIGHTER HISTORY LEDGER */
+    /* 2. ULTRA-TIGHT LEDGER (20px) */
     .row-container {
         position: relative; 
-        height: 48px; /* Tightened from 60px */
-        margin-bottom: 1px; /* Minimal gap */
+        height: 20px; /* Requested 20px height */
+        margin-bottom: 0px; 
         width: 100%;
+        overflow: hidden;
     }
     .trans-row {
         display: flex;
@@ -30,80 +31,87 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        padding: 0 10px;
-        height: 48px;
+        padding: 0 8px;
+        height: 20px;
         width: 100%;
         position: absolute;
         top: 0;
         left: 0;
         z-index: 1;
         pointer-events: none;
+        line-height: 20px;
     }
-    .tr-date { width: 20%; font-size: 0.8rem; color: #000; font-weight: 800; }
-    .tr-cat { width: 50%; font-size: 0.85rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 0.95rem; font-weight: 900; text-align: right; }
+    .tr-date { width: 22%; font-size: 0.7rem; color: #000; font-weight: 800; }
+    .tr-cat { width: 48%; font-size: 0.75rem; color: #333; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 0.75rem; font-weight: 900; text-align: right; }
     
-    .row-container .stButton { position: absolute; top: 0; left: 0; width: 100%; height: 48px; z-index: 5; }
+    /* Click Layer - Scaled to 20px */
+    .row-container .stButton { position: absolute; top: 0; left: 0; width: 100%; height: 20px; z-index: 5; }
     .row-container .stButton button {
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
         width: 100% !important;
-        height: 48px !important;
+        height: 20px !important;
+        padding: 0 !important;
+        margin: 0 !important;
         cursor: pointer;
     }
 
-    /* 3. FILTER UI: NO-SCROLL FORCED ROW */
-    [data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
+    /* 3. FILTER UI: FORCE FIT TO SCREEN */
+    /* Target the container for the date columns */
+    div[data-testid="stHorizontalBlock"] {
         display: flex !important;
+        flex-direction: row !important;
         flex-wrap: nowrap !important;
         width: 100% !important;
-        gap: 6px !important;
-        margin-bottom: 10px !important;
+        gap: 4px !important;
+        margin-top: 5px !important;
     }
 
-    [data-testid="column"] {
-        width: 50% !important;
-        flex: 1 1 50% !important;
-        min-width: 0 !important; /* Forces shrink to fit screen */
+    /* Target columns to be exactly 50% minus gap */
+    div[data-testid="column"] {
+        flex: 1 1 48% !important;
+        min-width: 0 !important;
+        width: 48% !important;
     }
 
-    /* Input Box Adjustments */
+    /* Shrink the date picker boxes */
     div[data-testid="stDateInput"] label { display: none !important; }
-    div[data-testid="stDateInput"] > div { 
-        height: 38px !important; 
-        min-height: 38px !important;
+    div[data-testid="stDateInput"] div[data-baseweb="input"] {
+        height: 32px !important;
+        min-height: 32px !important;
     }
     div[data-testid="stDateInput"] input {
-        font-size: 0.75rem !important; /* Smaller text to prevent overflow */
+        font-size: 0.7rem !important;
         padding: 0 4px !important;
     }
 
-    .filter-label-top {
-        font-size: 0.7rem;
-        font-weight: 800;
-        color: #888;
-        margin: 10px 0 5px 0; /* Ensures it doesn't get covered */
+    .filter-header-text {
+        font-size: 0.65rem;
+        font-weight: 900;
+        color: #999;
+        margin-bottom: 2px;
+        padding-top: 10px; /* Space so it's not covered */
         text-transform: uppercase;
-        display: block;
     }
 
-    /* Ledger Header */
+    /* Ledger Header (Tighter) */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 8px 10px;
-        border-bottom: 2px solid #333;
-        color: #444;
-        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-bottom: 1px solid #333;
+        color: #666;
+        font-size: 0.6rem;
         font-weight: 800;
         text-transform: uppercase;
+        background: #fafafa;
     }
 
     /* Popover Scaling */
-    div[data-testid="stPopover"] { width: 100%; margin-top: 5px; }
-    div[data-testid="stCheckbox"] { margin-bottom: 6px !important; }
+    div[data-testid="stPopover"] { width: 100%; margin-top: 4px; }
+    div[data-testid="stPopover"] button { height: 32px !important; font-size: 0.75rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -129,7 +137,7 @@ if not st.session_state["authenticated"]:
             st.rerun()
     st.stop()
 
-# --- DATA ---
+# --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_float(val):
@@ -164,7 +172,7 @@ df_t, df_c = load_data_clean()
 def get_icon(cat_name, row_type):
     n = str(cat_name).lower()
     if "groc" in n: return "🛒"
-    if "tithe" in n or "church" in n: return "⛪"
+    if "tithe" in n: return "⛪"
     if "gas" in n or "fuel" in n: return "⛽"
     if "ethan" in n: return "👤"
     if "alesa" in n: return "👩"
@@ -199,7 +207,7 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
-# --- APP ---
+# --- APP TABS ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
@@ -247,16 +255,16 @@ with tab3:
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
         with st.expander("🔍 Filter History", expanded=False):
-            st.markdown('<div class="filter-label-top">Date Range</div>', unsafe_allow_html=True)
+            # Safe label placement
+            st.markdown('<div class="filter-header-text">Date Range</div>', unsafe_allow_html=True)
             
-            # Forced side-by-side without horizontal overflow
-            col1, col2 = st.columns(2)
-            with col1:
+            # The Columns: Forced Row with CSS
+            f_col1, f_col2 = st.columns(2)
+            with f_col1:
                 start_f = st.date_input("From", first_day, label_visibility="collapsed")
-            with col2:
+            with f_col2:
                 end_f = st.date_input("To", last_day, label_visibility="collapsed")
             
-            # Categories
             with st.popover("Filter Categories", use_container_width=True):
                 st.markdown("**Income**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
@@ -274,11 +282,11 @@ with tab3:
                 (work_df["Category"].isin(all_selected))
             ]
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.caption(f"Net: **${f_net:,.2f}** ({len(work_df)} tx)")
+            st.caption(f"Net: **${f_net:,.2f}** | Count: {len(work_df)}")
 
-        # Ledger List
+        # SORTED LEDGER
         work_df = work_df.sort_values(by="Date", ascending=False)
-        st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hist-header"><div style="width:22%">DATE</div><div style="width:48%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
@@ -286,15 +294,16 @@ with tab3:
             is_ex = row['Type'] == 'Expense'
             amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
-            price_color = "#d32f2f" if is_ex else "#2e7d32" 
+            p_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
             
+            # --- THE 20PX CONTAINER ---
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
+                    <div class="tr-amt" style="color:{p_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
@@ -315,7 +324,7 @@ with st.sidebar:
     st.header("Categories")
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
-        cn = st.text_input("New Name")
+        cn = st.text_input("New Category")
         if st.form_submit_button("Add"):
             if cn:
                 st.cache_resource.clear()
