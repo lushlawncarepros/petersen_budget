@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Compact 30px Row Height with Custom Padding-Adjusted Buttons
+# CSS: 30px Row Height with 20px Bottom Padding on Buttons
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -26,11 +26,11 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. THE ROW CONTAINER (30px) */
+    /* 3. THE ROW CONTAINER (Strict 30px height) */
     .row-container {
         position: relative; 
         height: 30px; 
-        margin-bottom: 2px;
+        margin-bottom: 2px; /* The 2px gap requested */
         width: 100%;
         background-color: var(--secondary-background-color); 
         border-radius: 4px;
@@ -58,27 +58,25 @@ st.markdown("""
     .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
     
-    /* 4. THE BUTTON OVERLAY (Using Padding to force height and position) */
+    /* 4. THE BUTTON OVERLAY (Set with 20px bottom padding) */
     .row-container .stButton {
         position: absolute;
-        top: 0; /* Forced to the top */
+        top: 0;
         left: 0;
         width: 100%;
         z-index: 5;
     }
     
     .row-container .stButton button {
-        /* Ethan's Padding Adjustment Strategy */
-        height: 15px !important;
+        /* Set padding as requested */
         padding-top: 0px !important;
-        padding-bottom: 20px !important; /* Increased padding below to force up */
-        min-height: 0px !important;
-        line-height: 0 !important;
+        padding-bottom: 20px !important; 
         
+        /* Reset and Hide Defaults */
+        height: auto !important;
+        min-height: 0px !important;
         background-color: transparent !important;
         color: transparent !important;
-        
-        /* Nuclear reset of outlines/borders */
         border: none !important;
         border-width: 0 !important;
         border-style: none !important;
