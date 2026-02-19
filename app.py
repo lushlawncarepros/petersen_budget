@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Functioning Color-Coded Category Checkboxes
+# CSS: High-Contrast Layout with Precise Checkbox Coloring
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -34,7 +34,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* 20px bottom padding to shift text significantly higher for perfect vertical balance */
+        /* 20px bottom padding shifts text up for perfect vertical balance */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -102,22 +102,23 @@ st.markdown("""
         padding-top: 5px !important;
     }
     
-    /* CUSTOM CHECKBOX COLORS VIA SIBLING TARGETING */
+    /* PRECISE CHECKBOX COLORS */
+    /* Target only the first div after the input (the actual box) */
     
-    /* 1. Default color for all checkboxes (handles Expenses) */
-    [data-testid="stCheckbox"] input:checked ~ div {
+    /* 1. Default (Expenses) = Red */
+    [data-testid="stCheckbox"] input:checked + div {
         background-color: #d32f2f !important;
         border-color: #d32f2f !important;
     }
 
-    /* 2. Target Income Checkboxes specifically (siblings following the income marker) */
-    .element-container:has(.income-marker) ~ .element-container [data-testid="stCheckbox"] input:checked ~ div {
+    /* 2. Income Sections = Green */
+    .element-container:has(.income-marker) ~ .element-container [data-testid="stCheckbox"] input:checked + div {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
     }
 
-    /* 3. Reset subsequent checkboxes to Red (siblings following the expense marker) */
-    .element-container:has(.expense-marker) ~ .element-container [data-testid="stCheckbox"] input:checked ~ div {
+    /* 3. Re-reset following sections (Expenses) = Red */
+    .element-container:has(.expense-marker) ~ .element-container [data-testid="stCheckbox"] input:checked + div {
         background-color: #d32f2f !important;
         border-color: #d32f2f !important;
     }
