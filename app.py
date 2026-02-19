@@ -35,6 +35,7 @@ st.markdown("""
     .tr-amt  { width: 30%; font-size: 0.95rem; font-weight: 700; text-align: right; }
     
     /* 2. INVISIBLE BUTTON OVERLAY */
+    /* We style the button to be completely transparent and cover the row */
     .row-overlay button {
         background-color: transparent !important;
         color: transparent !important;
@@ -92,26 +93,34 @@ if not st.session_state["authenticated"]:
 # --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data_simple():
+def safe_float(val):
+    """Safely cleans currency strings or numbers."""
+    try:
+        if isinstance(val, (int, float)):
+            return float(val)
+        if isinstance(val, str):
+            clean = val.replace('$', '').replace(',', '').strip()
+            return float(clean) if clean else 0.0
+        return 0.0
+    except:
+        return 0.0
+
+def load_data_robust():
     st.cache_data.clear()
     try:
-        # Read standard
         t_df = conn.read(worksheet="transactions", ttl=0)
         c_df = conn.read(worksheet="categories", ttl=0)
         
         # --- CLEAN TRANSACTIONS ---
         if t_df is not None and not t_df.empty:
-            # Normalize Headers
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             
-            # Ensure columns exist
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # NO TEXT CLEANING - Just direct conversion
-            t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
+            # Use safe float conversion
+            t_df["Amount"] = t_df["Amount"].apply(safe_float)
             
-            # Date Handling (Kept this fix)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
@@ -128,7 +137,7 @@ def load_data_simple():
     except Exception:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
-df_t, df_c = load_data_simple()
+df_t, df_c = load_data_robust()
 
 def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
@@ -150,7 +159,6 @@ def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
     clist = get_cat_list(row_data["Type"])
-    # Safe Indexing
     try:
         c_idx = clist.index(row_data["Category"])
     except ValueError:
@@ -165,7 +173,6 @@ def edit_dialog(row_index, row_data):
             df_t.at[row_index, "Date"] = pd.to_datetime(e_date)
             df_t.at[row_index, "Category"] = e_cat
             df_t.at[row_index, "Amount"] = e_amt
-            # Format date for sheet
             df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
             conn.update(worksheet="transactions", data=df_t)
             st.success("Updated!")
@@ -174,7 +181,6 @@ def edit_dialog(row_index, row_data):
     with c2:
         if st.button("🗑️ Delete", use_container_width=True):
             new_df = df_t.drop(row_index)
-            # Format date for sheet
             new_df['Date'] = new_df['Date'].dt.strftime('%Y-%m-%d')
             conn.update(worksheet="transactions", data=new_df)
             st.success("Deleted!")
@@ -195,7 +201,7 @@ with tab1:
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save"):
             if f_clist:
-                latest_t, _ = load_data_simple()
+                latest_t, _ = load_data_robust()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date),
                     "Type": t_type,
@@ -229,7 +235,6 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # Sort
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
@@ -250,7 +255,6 @@ with tab3:
             amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             
-            # Colors
             if is_ex:
                 prefix = "-"
                 amt_color = "#d32f2f" # Red
@@ -270,8 +274,9 @@ with tab3:
             """, unsafe_allow_html=True)
             
             # 2. CLICK OVERLAY
+            # Removed label_visibility="hidden" to prevent error
             st.markdown('<div class="row-overlay">', unsafe_allow_html=True)
-            if st.button(f"btn_{i}", key=f"h_{i}", label_visibility="hidden"):
+            if st.button(" ", key=f"h_{i}"):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
@@ -297,7 +302,7 @@ with st.sidebar:
         if st.form_submit_button("Add Category"):
             if cn:
                 st.cache_resource.clear()
-                _, latest_c = load_data_simple()
+                _, latest_c = load_data_robust()
                 updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c)
                 st.success("Added!")
