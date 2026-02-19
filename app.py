@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: The "Mobile Force" Layout
+# CSS: The "Mobile Force" Layout with Scaling Fixes
 st.markdown("""
     <style>
     /* 1. GLOBAL UI TWEAKS */
@@ -53,33 +53,43 @@ st.markdown("""
         cursor: pointer;
     }
 
-    /* 3. FILTER UI: FORCE SIDE-BY-SIDE ON MOBILE */
+    /* 3. FILTER UI: FORCE SIDE-BY-SIDE & SHRINK TO FIT */
     /* Target the container that holds st.columns */
     [data-testid="stHorizontalBlock"] {
         flex-direction: row !important;
         display: flex !important;
         flex-wrap: nowrap !important;
-        gap: 10px !important;
-        margin-bottom: 15px !important; /* Spacing below the date row */
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+        width: 100% !important;
     }
 
-    /* Target the individual columns to be 50% width */
+    /* Target the individual columns to shrink properly */
     [data-testid="column"] {
-        width: calc(50% - 5px) !important;
-        flex: 1 1 calc(50% - 5px) !important;
-        min-width: calc(50% - 5px) !important;
+        min-width: 0 !important; /* Critical for shrinking */
+        flex: 1 1 auto !important;
+        width: auto !important;
     }
 
-    /* Make the date boxes shorter and hide internal labels */
+    /* Make the date boxes shorter and fit text */
     div[data-testid="stDateInput"] label { display: none !important; }
-    div[data-testid="stDateInput"] > div { height: 45px !important; }
+    div[data-testid="stDateInput"] > div { 
+        height: 40px !important; 
+        min-height: 40px !important;
+    }
+    div[data-testid="stDateInput"] input {
+        font-size: 0.8rem !important; /* Smaller font to fit on mobile */
+        padding: 0 5px !important;
+    }
 
     .filter-group-label {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 800;
-        color: #666;
-        margin-bottom: 5px;
+        color: #777;
+        margin-bottom: 8px; /* Added space to prevent overlap */
+        margin-top: 5px;
         text-transform: uppercase;
+        display: block;
     }
 
     /* Ledger Header */
@@ -95,7 +105,7 @@ st.markdown("""
     }
 
     /* Category Popover Spacing */
-    div[data-testid="stPopover"] { width: 100%; margin-top: 5px; }
+    div[data-testid="stPopover"] { width: 100%; margin-top: 8px; }
     div[data-testid="stCheckbox"] { margin-bottom: 8px !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -242,14 +252,14 @@ with tab3:
         with st.expander("🔍 Filter History", expanded=False):
             st.markdown('<div class="filter-group-label">Date Range</div>', unsafe_allow_html=True)
             
-            # The columns here are now forced side-by-side by CSS
+            # Forced row via CSS [data-testid="stHorizontalBlock"]
             col1, col2 = st.columns(2)
             with col1:
                 start_f = st.date_input("From", first_day, label_visibility="collapsed")
             with col2:
                 end_f = st.date_input("To", last_day, label_visibility="collapsed")
             
-            # Categories
+            # Categories Popover
             with st.popover("Filter Categories", use_container_width=True):
                 st.markdown("**Income**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
