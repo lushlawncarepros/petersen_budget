@@ -105,6 +105,15 @@ st.markdown("""
         margin-bottom: 15px !important; 
     }
     .stButton>button { border-radius: 12px; }
+
+    /* Decoy CSS to hide the focus stealer */
+    .decoy-focus {
+        height: 0;
+        width: 0;
+        opacity: 0;
+        position: absolute;
+        pointer-events: none;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -175,6 +184,9 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
+    # Decoy element to steal initial focus from the date input
+    st.markdown('<div class="decoy-focus"><button nonce="focus-fix"></button></div>', unsafe_allow_html=True)
+    
     st.write(f"Editing: **{row_data['Category']}**")
     
     e_date = st.date_input("Date", row_data["Date"])
@@ -182,7 +194,6 @@ def edit_dialog(row_index, row_data):
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     
-    # Restored to original number_input
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
     # 30px Buffer
