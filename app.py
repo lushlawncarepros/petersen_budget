@@ -184,6 +184,7 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
+    # Hidden button to steal initial focus from the date input
     st.markdown('<div class="decoy-focus"><button nonce="focus-fix"></button></div>', unsafe_allow_html=True)
     st.write(f"Editing: **{row_data['Category']}** &nbsp; | &nbsp; Entry Created by: **{row_data.get('User', 'Unknown')}**")
     
@@ -393,6 +394,7 @@ with st.sidebar:
         target_cat = st.selectbox("Select Category", manage_list, key="m_list")
         
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
-        if st.button("🔧 Manage Selected", use_container_width=True):
+        # Renamed from "🔧 Manage Selected" to "🔧 Manage Category"
+        if st.button("🔧 Manage Category", use_container_width=True):
             if target_cat:
                 manage_cat_dialog(target_cat, manage_type)
