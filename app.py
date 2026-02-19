@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Refined Mobile List with Perfected Vertical Centering
+# CSS: Refined Mobile List with Perfected Vertical Shifting
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -30,11 +30,12 @@ st.markdown("""
     /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
-        align-items: center; /* Vertical Center */
+        align-items: center; 
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        padding: 0 12px 8px 12px; /* Added 8px bottom padding to "pull" text up */
+        /* Increased bottom padding to 13px to pull text up further */
+        padding: 0 12px 13px 12px; 
         height: 60px;
         width: 100%;
         position: absolute;
