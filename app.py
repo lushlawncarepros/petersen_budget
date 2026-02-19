@@ -1,14 +1,15 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime, date
+import calendar
 import time
 from streamlit_gsheets import GSheetsConnection
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Absolute Overlay for perfect alignment & full-width coverage
+# CSS: Refined Mobile List with Grid Overlay
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -69,11 +70,7 @@ st.markdown("""
         cursor: pointer;
     }
     
-    .row-container .stButton button:hover {
-        background-color: rgba(0,0,0,0.03) !important;
-    }
-    
-    /* Header Styling */
+    /* Static Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -87,6 +84,9 @@ st.markdown("""
 
     /* Style for non-history buttons */
     .stButton>button { border-radius: 12px; }
+    
+    /* Compact popover checkbox spacing */
+    div[data-testid="stCheckbox"] { margin-bottom: -15px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -112,7 +112,7 @@ if not st.session_state["authenticated"]:
             st.rerun()
     st.stop()
 
-# --- DATA ENGINE ---
+# --- DATA ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_float(val):
@@ -139,6 +139,7 @@ def load_data_clean():
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+            
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
@@ -149,11 +150,6 @@ def load_data_clean():
 
 df_t, df_c = load_data_clean()
 
-def get_cat_list(t_filter):
-    if df_c.empty or "Name" not in df_c.columns: return []
-    cats = df_c[df_c["Type"] == t_filter]["Name"].unique().tolist()
-    return sorted(cats, key=str.lower)
-
 def get_icon(cat_name, row_type):
     n = str(cat_name).lower()
     if "groc" in n: return "🛒"
@@ -163,14 +159,16 @@ def get_icon(cat_name, row_type):
     if "alesa" in n: return "👩"
     return "💸" if row_type == "Expense" else "💰"
 
-# --- EDITOR DIALOG ---
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
-    clist = get_cat_list(row_data["Type"])
-    c_idx = clist.index(row_data["Category"]) if row_data["Category"] in clist else 0
-    e_cat = st.selectbox("Category", clist, index=c_idx)
+    
+    # Get categories by type for the dropdown
+    cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
+    c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
+    
+    e_cat = st.selectbox("Category", cat_list, index=c_idx)
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
     c1, c2 = st.columns(2)
@@ -193,7 +191,7 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
-# --- APP TABS ---
+# --- MAIN APP ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
@@ -202,11 +200,11 @@ with tab1:
     t_type = st.radio("Type", ["Expense", "Income"], horizontal=True)
     with st.form("entry_form", clear_on_submit=True):
         f_date = st.date_input("Date", datetime.now())
-        f_clist = get_cat_list(t_type)
-        f_cat = st.selectbox("Category", f_clist if f_clist else ["(Add categories in sidebar)"])
+        f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
+        f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save"):
-            if f_clist:
+            if f_cats:
                 latest_t, _ = load_data_clean()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date), "Type": t_type, "Category": f_cat,
@@ -238,51 +236,64 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # --- FILTER ENGINE ---
-        with st.expander("🔍 Filter History"):
-            f_cols = st.columns(2)
-            # Default to last 30 days
-            with f_cols[0]:
-                start_date = st.date_input("From", datetime.now() - timedelta(days=30))
-            with f_cols[1]:
-                end_date = st.date_input("To", datetime.now())
+        # 1. CALCULATE DEFAULT DATE RANGE (Full Current Month)
+        today = date.today()
+        first_day = today.replace(day=1)
+        last_day_num = calendar.monthrange(today.year, today.month)[1]
+        last_day = today.replace(day=last_day_num)
+
+        # 2. FILTER UI
+        with st.expander("🔍 Filter View"):
+            # Date Selection
+            c_date1, c_date2 = st.columns(2)
+            with c_date1:
+                start_f = st.date_input("From", first_day)
+            with c_date2:
+                end_f = st.date_input("To", last_day)
             
-            all_cats = sorted(df_t["Category"].unique().tolist())
-            sel_cats = st.multiselect("Categories", all_cats, default=all_cats)
-            
-            # Apply Filters
+            # Category Selection via Popover (Checkboxes grouped by Type)
+            with st.popover("Select Categories"):
+                st.markdown("**Income Categories**")
+                inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
+                sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"filter_inc_{cat}")]
+                
+                st.divider()
+                st.markdown("**Expense Categories**")
+                exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
+                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"filter_exp_{cat}")]
+                
+                all_selected = sel_inc + sel_exp
+
+            # Filter the dataframe
             work_df = df_t.copy()
             work_df = work_df[
-                (work_df["Date"].dt.date >= start_date) & 
-                (work_df["Date"].dt.date <= end_date) & 
-                (work_df["Category"].isin(sel_cats))
+                (work_df["Date"].dt.date >= start_f) & 
+                (work_df["Date"].dt.date <= end_f) & 
+                (work_df["Category"].isin(all_selected))
             ]
             
-            # Show small summary of filtered data
-            f_inc = work_df[work_df["Type"] == "Income"]["Amount"].sum()
-            f_exp = work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.markdown(f"**Filtered Net:** `${(f_inc - f_exp):,.2f}`")
+            f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
+            st.markdown(f"**Filtered Net:** `${f_net:,.2f}`")
 
-        # Sort for display
+        # 3. RENDER LEDGER
         work_df = work_df.sort_values(by="Date", ascending=False)
-        
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
+            amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
-            amt_display = f"{prefix}${row['Amount']:,.0f}"
             
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{price_color};">{amt_display}</div>
+                    <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
@@ -291,7 +302,6 @@ with tab3:
     else:
         st.info("History is empty.")
 
-# --- SIDEBAR ---
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
     if st.button("🔄 Force Sync"):
