@@ -129,14 +129,24 @@ if "authenticated" not in st.session_state:
 
 if not st.session_state["authenticated"]:
     st.title("🔐 Login")
+    st.markdown('<div style="margin-bottom: 20px;"></div>', unsafe_allow_html=True)
+    
     u = st.text_input("Username").lower()
     p = st.text_input("Password", type="password")
-    if st.button("Login"):
+    remember_me = st.checkbox("Remember me", value=True)
+    
+    # 30px Buffer before Login button
+    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+    
+    if st.button("Login", use_container_width=True):
         if u in USERS and USERS[u] == p:
             st.session_state["authenticated"] = True
             st.session_state["user"] = u.capitalize()
-            st.query_params["user"] = u
+            if remember_me:
+                st.query_params["user"] = u
             st.rerun()
+        else:
+            st.error("Invalid username or password.")
     st.stop()
 
 # --- DATA ENGINE ---
@@ -184,7 +194,6 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
-    # Hidden button to steal initial focus from the date input
     st.markdown('<div class="decoy-focus"><button nonce="focus-fix"></button></div>', unsafe_allow_html=True)
     st.write(f"Editing: **{row_data['Category']}** &nbsp; | &nbsp; Entry Created by: **{row_data.get('User', 'Unknown')}**")
     
@@ -225,7 +234,6 @@ def edit_dialog(row_index, row_data):
 def manage_cat_dialog(old_name, cat_type):
     st.write(f"Managing **{cat_type}**: {old_name}")
     
-    # Ability to change Type (Expense/Income)
     new_type = st.selectbox("Designation", ["Expense", "Income"], index=0 if cat_type == "Expense" else 1)
     new_name = st.text_input("Category Name", value=old_name)
     
@@ -235,20 +243,17 @@ def manage_cat_dialog(old_name, cat_type):
     with c1:
         if st.button("💾 Save Changes", use_container_width=True):
             if new_name and (new_name != old_name or new_type != cat_type):
-                # 1. Update Category List Entry
                 mask_c = (df_c["Type"] == cat_type) & (df_c["Name"] == old_name)
                 df_c.loc[mask_c, "Name"] = new_name
                 df_c.loc[mask_c, "Type"] = new_type
                 conn.update(worksheet="categories", data=df_c)
                 
-                # 2. Sync all existing transactions
                 mask_t = (df_t["Category"] == old_name)
                 df_t.loc[mask_t, "Category"] = new_name
                 df_t.loc[mask_t, "Type"] = new_type
                 
                 df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
                 conn.update(worksheet="transactions", data=df_t)
-                
                 st.success("Updated everywhere!")
                 time.sleep(1)
                 st.rerun()
@@ -279,7 +284,7 @@ with tab1:
         f_memo = st.text_input("Memo", placeholder="Optional details")
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
-        if st.form_submit_button("Save"):
+        if st.form_submit_button("Save", use_container_width=True):
             if f_cats and f_amt is not None:
                 latest_t, _ = load_data_clean()
                 new_entry = pd.DataFrame([{
@@ -358,16 +363,16 @@ with tab3:
 
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
-    if st.button("🔄 Force Sync"):
+    if st.button("🔄 Force Sync", use_container_width=True):
         st.cache_resource.clear()
         st.cache_data.clear()
         st.rerun()
-    if st.button("Logout"):
+    if st.button("Logout", use_container_width=True):
         st.session_state["authenticated"] = False
+        st.query_params.clear()
         st.rerun()
     st.divider()
     
-    # --- CATEGORY SECTION ---
     st.header("Categories")
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
@@ -383,18 +388,13 @@ with st.sidebar:
                 time.sleep(0.5)
                 st.rerun()
     
-    # --- MANAGE CATEGORY SECTION (Matches Categories header style and box) ---
     st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
     st.header("Manage Existing Category")
-    
-    # Container with border provides the "little grey box" visual match
     with st.container(border=True):
         manage_type = st.selectbox("View Type", ["Expense", "Income"], key="m_type")
         manage_list = sorted(df_c[df_c["Type"] == manage_type]["Name"].unique().tolist())
         target_cat = st.selectbox("Select Category", manage_list, key="m_list")
-        
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
-        # Renamed from "🔧 Manage Selected" to "🔧 Manage Category"
         if st.button("🔧 Manage Category", use_container_width=True):
             if target_cat:
                 manage_cat_dialog(target_cat, manage_type)
