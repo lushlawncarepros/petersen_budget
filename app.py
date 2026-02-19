@@ -40,7 +40,7 @@ st.markdown("""
         top: 0;
         left: 0;
         z-index: 1;
-        pointer-events: none; /* Clicks pass through to button layer */
+        pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
     }
     
@@ -70,7 +70,7 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Header Styling for Ledger */
+    /* Header Styling */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -82,16 +82,22 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    /* Style for category popover spacing */
+    /* Filter UI tweaks */
     div[data-testid="stPopover"] { width: 100%; }
+    div[data-testid="stCheckbox"] { margin-bottom: 8px !important; }
     
-    /* Spacing between checkboxes in popover */
-    div[data-testid="stCheckbox"] { 
-        margin-bottom: 10px !important; 
-        padding: 5px 0;
+    /* Force date inputs to look shorter by reducing label space */
+    div[data-testid="stDateInput"] label { display: none; }
+    
+    .filter-label {
+        font-size: 0.7rem;
+        font-weight: bold;
+        color: #888;
+        margin-bottom: 2px;
+        text-transform: uppercase;
     }
-    
-    /* Button Radius for standard buttons */
+
+    /* Button Radius */
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -244,26 +250,24 @@ with tab3:
         first_day = today.replace(day=1)
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
-        with st.expander("🔍 Filter History", expanded=False):
-            # Compact Date Selection (using [1, 1, 1] to make boxes small)
-            dc1, dc2, dc3 = st.columns([1, 1, 0.5])
+        with st.expander("🔍 Filters", expanded=False):
+            # Shortened Date Selection Row
+            st.markdown('<div class="filter-label">Date Range</div>', unsafe_allow_html=True)
+            dc1, dc2 = st.columns(2)
             with dc1:
-                start_f = st.date_input("From", first_day)
+                start_f = st.date_input("From", first_day, label_visibility="collapsed")
             with dc2:
-                end_f = st.date_input("To", last_day)
+                end_f = st.date_input("To", last_day, label_visibility="collapsed")
             
-            # Popover for Categories with improved spacing
-            with st.popover("Filter Categories"):
-                st.write("---")
+            # Categories
+            with st.popover("Filter Categories", use_container_width=True):
                 st.markdown("**Income**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
                 sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
-                
-                st.write("---")
+                st.divider()
                 st.markdown("**Expenses**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
-                
                 all_selected = sel_inc + sel_exp
 
             work_df = df_t.copy()
@@ -273,7 +277,7 @@ with tab3:
                 (work_df["Category"].isin(all_selected))
             ]
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.caption(f"Showing {len(work_df)} transactions | Net: **${f_net:,.2f}**")
+            st.caption(f"Net for selection: **${f_net:,.2f}**")
 
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
