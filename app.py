@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast, Tight-Stacked Layout
+# CSS: Ultra-Compact Stacked Layout
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -26,10 +26,10 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. THE ROW CONTAINER (Fixed 48px height) */
+    /* 3. THE ROW CONTAINER (Reduced to 32px for compact stacking) */
     .row-container {
         position: relative; 
-        height: 48px; 
+        height: 32px; 
         margin-bottom: 2px; /* The 2px gap Ethan requested */
         width: 100%;
         background-color: var(--secondary-background-color); 
@@ -37,14 +37,14 @@ st.markdown("""
         overflow: hidden;
     }
     
-    /* VISUAL LAYER (Text) - Locked inside the container */
+    /* VISUAL LAYER (Text) - Vertically centered in the 32px height */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
         padding: 0 12px; 
-        height: 48px;
+        height: 32px;
         width: 100%;
         position: absolute;
         top: 0;
@@ -54,17 +54,17 @@ st.markdown("""
         font-family: "Source Sans Pro", sans-serif;
     }
     
-    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; opacity: 0.8; }
-    .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
+    .tr-date { width: 20%; font-size: 0.8rem; font-weight: 700; opacity: 0.8; }
+    .tr-cat { width: 50%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 0.95rem; font-weight: 800; text-align: right; }
     
-    /* CLICK LAYER (Invisible Button Overlay) - Perfectly aligned to the container */
+    /* CLICK LAYER (Invisible Button Overlay) - Matched to 32px */
     .row-container .stButton {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
-        height: 48px;
+        height: 32px;
         z-index: 5;
     }
     
@@ -75,7 +75,7 @@ st.markdown("""
         box-shadow: none !important;
         outline: none !important;
         width: 100% !important;
-        height: 48px !important;
+        height: 32px !important;
         padding: 0 !important;
         margin: 0 !important;
         display: block !important;
@@ -86,17 +86,17 @@ st.markdown("""
         background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* Ledger Header Labels (1.0rem) */
+    /* Ledger Header Labels (Reduced for compactness) */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 10px 12px;
+        padding: 6px 12px;
         border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
-        font-size: 1.0rem; 
+        font-size: 0.9rem; 
         font-weight: 800;
         text-transform: uppercase;
-        margin-bottom: 8px;
-        margin-top: 10px;
+        margin-bottom: 4px;
+        margin-top: 5px;
     }
 
     /* General UI Tweaks */
@@ -283,7 +283,6 @@ with tab3:
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
             
-            # This wrapper structure is much more stable for button alignment
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="trans-row">
