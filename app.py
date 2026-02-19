@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Thick Delineator and Color-Coded Filters
+# CSS: High-Contrast Layout with Refined Header and Shifting Text
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -73,14 +73,18 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Ledger Header - Bold 8px Black Line */
+    .row-container .stButton button:hover {
+        background-color: rgba(0,0,0,0.03) !important;
+    }
+    
+    /* Ledger Header - Adjusted font size and removed line */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
-        border-bottom: 8px solid #000 !important; /* Thick Black Line */
+        border-bottom: 2px solid #eee; /* Light baseline only */
         color: #111;
-        font-size: 1.5rem; 
+        font-size: 1.1rem; /* Reduced by 25% from 1.5rem */
         font-weight: 800;
         text-transform: uppercase;
         background-color: white;
@@ -99,12 +103,10 @@ st.markdown("""
     }
     
     /* Custom Checkbox Colors */
-    /* Income = Green */
     .income-filter div[data-testid="stCheckbox"] input:checked ~ div {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
     }
-    /* Expense = Red */
     .expense-filter div[data-testid="stCheckbox"] input:checked ~ div {
         background-color: #d32f2f !important;
         border-color: #d32f2f !important;
