@@ -191,11 +191,57 @@ df_t, df_c, df_b = load_data_clean()
 
 def get_icon(cat_name, row_type):
     n = str(cat_name).lower()
-    if "groc" in n: return "🛒"
-    if "tithe" in n or "church" in n: return "⛪"
-    if "gas" in n or "fuel" in n: return "⛽"
-    if "ethan" in n: return "👤"
+    
+    # Family & Pets
+    if "ethan" in n: return "🧔"
     if "alesa" in n: return "👩"
+    if "gabe" in n: return "👦"
+    if "mel" in n or "kimmy" in n: return "👧"
+    if "wes" in n: return "👶"
+    if "kid" in n or "child" in n: return "🧒"
+    if "luna" in n or "dog" in n: return "🐕"
+    if "kevin" in n or "cat" in n: return "🐈"
+    if "pet" in n or "vet" in n: return "🐾"
+    
+    # Housing & Utilities
+    if "mortgage" in n or "rent" in n or "home" in n or "house" in n: return "🏠"
+    if "electric" in n or "power" in n: return "⚡"
+    if "water" in n or "trash" in n or "sewer" in n: return "💧"
+    if "internet" in n or "wifi" in n: return "🌐"
+    if "phone" in n or "cell" in n: return "📱"
+    
+    # Food & Dining
+    if "groc" in n: return "🛒"
+    if "rest" in n or "dine" in n or "eat" in n or "food" in n: return "🍽️"
+    
+    # Transportation
+    if "gas" in n or "fuel" in n: return "⛽"
+    if "car" in n or "auto" in n or "truck" in n: return "🚗"
+    if "repair" in n or "maint" in n: return "🔧"
+    
+    # Religion & Charity
+    if "tithe" in n or "church" in n or "fast" in n: return "⛪"
+    if "charity" in n or "give" in n: return "🤲"
+    
+    # Health & Fitness
+    if "med" in n or "doc" in n or "health" in n or "dent" in n: return "🏥"
+    if "gym" in n or "fitness" in n or "train" in n: return "🏋️"
+    
+    # Hobbies & Entertainment
+    if "camp" in n or "tent" in n: return "⛺"
+    if "game" in n or "play" in n: return "🎲"
+    if "book" in n or "audio" in n or "audible" in n: return "🎧"
+    if "date" in n or "fun" in n: return "🍿"
+    
+    # Shopping & Misc
+    if "cloth" in n or "shoe" in n: return "👕"
+    if "amazon" in n or "shop" in n: return "📦"
+    
+    # Business, Savings & Income
+    if "lush" in n or "lawn" in n or "yard" in n: return "🌿"
+    if "pay" in n or "salary" in n or "check" in n or "wage" in n: return "💵"
+    if "save" in n or "invest" in n: return "📈"
+    
     return "💸" if row_type == "Expense" else "💰"
 
 @st.dialog("Manage Entry")
