@@ -24,10 +24,10 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. LAYOUT SPACING - Row Container Height changed to 25px; margin-bottom: 0px */
+    /* 3. LAYOUT SPACING - Row Container Height: 25px; margin-bottom: 0px */
     .row-container {
         position: relative; 
-        height: 25px; /* Changed from 30px to 25px */
+        height: 25px; 
         margin-bottom: 0px; 
         width: 100%;
         background-color: transparent; 
@@ -45,7 +45,7 @@ st.markdown("""
         height: 40px; /* Total Height: 40px */
         width: 100%;
         position: absolute;
-        top: 0; /* Vertical Offset (top): 0 */
+        top: 0; 
         left: 0;
         z-index: 1;
         pointer-events: none;
@@ -78,8 +78,8 @@ st.markdown("""
         outline: none !important;
         width: 100% !important;
         height: 45px !important; 
-        padding: 0px !important; /* Padding: 0px */
-        margin: 0px !important;  /* Margin: 0px */
+        padding: 0px !important; 
+        margin: 0px !important;  
         display: block !important;
         cursor: pointer;
     }
@@ -100,8 +100,8 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* General UI Tweaks */
-    div[data-testid="stPopover"] { width: 100%; }
+    /* General UI Tweaks - Space added here */
+    div[data-testid="stPopover"] { width: 100%; margin-top: 30px !important; }
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -251,8 +251,9 @@ with tab3:
 
         with st.expander("🔍 Filter View"):
             c1, c2 = st.columns(2)
-            with c1: start_f = st.date_input("From", first_day)
-            with c2: end_f = st.date_input("To", last_day)
+            with c1: start_f = st.date_input("From", start_f if 'start_f' in locals() else first_day)
+            with c2: end_f = st.date_input("To", end_f if 'end_f' in locals() else last_day)
+            
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
