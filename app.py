@@ -9,11 +9,14 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Perfectly Aligned Overlay Buttons with Nudged Font
+# CSS: High-Contrast Layout with Vertical Alignment Fix
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
+    
+    /* Remove vertical gaps between block elements */
+    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* --- TAB STYLING --- */
     button[data-baseweb="tab"] p {
@@ -21,40 +24,43 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 1. THE ROW CONTAINER */
+    /* THE ROW CONTAINER */
     .row-container {
-        position: relative;
-        width: 100%;
+        position: relative; 
         height: 45px; 
-        margin-bottom: 8px; 
+        margin-bottom: 8px;
+        width: 100%;
+        background-color: transparent; 
     }
     
-    /* 2. VISUAL LAYER (Text) */
+    /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
-        /* Aligns text vertically, but we add padding-top to "push" font down more */
         align-items: center; 
         justify-content: space-between;
         background-color: var(--secondary-background-color);
         border-radius: 8px;
-        /* Added 5px padding-top to move the font down in relation to the button */
-        padding: 5px 12px 0 12px !important; 
-        height: 45px; 
+        /* THE ALIGNMENT FIX: 
+           We use a small top padding and 0 bottom padding to 
+           line the font up with the invisible button's center. */
+        padding: 4px 12px 0px 12px !important; 
+        height: 45px;
         width: 100%;
         position: absolute;
         top: 0;
         left: 0;
         z-index: 1;
+        pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
         border: 1px solid rgba(128, 128, 128, 0.1);
         box-sizing: border-box;
     }
     
-    .tr-date { width: 20%; font-size: 0.9rem; font-weight: 700; opacity: 0.8; }
-    .tr-cat { width: 50%; font-size: 1.0rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 1.1rem; font-weight: 800; text-align: right; }
+    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; opacity: 0.8; }
+    .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 3. THE CLICK LAYER (The Streamlit Button) */
+    /* 2. THE CLICK LAYER (Seamless Button Overlay) */
     .row-container div[data-testid="element-container"] {
         position: absolute !important;
         top: 0 !important;
@@ -65,7 +71,7 @@ st.markdown("""
         margin: 0 !important;
         padding: 0 !important;
     }
-    
+
     .row-container .stButton button {
         background-color: transparent !important;
         color: transparent !important;
@@ -84,13 +90,13 @@ st.markdown("""
         background-color: rgba(128,128,128,0.05) !important;
     }
     
-    /* Ledger Header Labels */
+    /* Ledger Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 10px 12px;
+        padding: 10px;
         border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
-        font-size: 0.9rem; 
+        font-size: 1.0rem; 
         font-weight: 800;
         text-transform: uppercase;
         margin-bottom: 12px;
@@ -98,7 +104,7 @@ st.markdown("""
 
     /* General UI Tweaks */
     div[data-testid="stPopover"] { width: 100%; }
-    .stButton>button { border-radius: 10px; }
+    .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
