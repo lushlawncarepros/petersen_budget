@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Exact Measurements
+# CSS: High-Contrast Layout with Swipe Script and Exact Measurements
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -52,7 +52,7 @@ st.markdown("""
         background-color: var(--secondary-background-color);
         border-radius: 8px;
         padding: 0px 12px 0px 12px !important; 
-        height: 40px; /* Visual row height */
+        height: 40px; 
         width: 100%;
         position: absolute;
         top: 0; 
@@ -68,13 +68,13 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. INVISIBLE CLICK BUTTON (.stButton button) - THE OVERLAY METHOD */
+    /* 2. INVISIBLE CLICK BUTTON (.stButton button) Overlay */
     .row-container div[data-testid="element-container"] {
         position: absolute !important;
         top: 0 !important;
         left: 0 !important;
         width: 100% !important;
-        height: 45px !important; /* Button hit-box height */
+        height: 45px !important; 
         z-index: 5 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -106,15 +106,51 @@ st.markdown("""
     }
     .stButton>button { border-radius: 12px; }
 
-    /* Decoy CSS to hide the focus stealer in dialogs */
+    /* Decoy CSS for Focus Fix */
     .decoy-focus {
-        height: 0;
-        width: 0;
-        opacity: 0;
-        position: absolute;
-        pointer-events: none;
+        height: 0; width: 0; opacity: 0; position: absolute; pointer-events: none;
     }
     </style>
+
+    <script>
+    // MOBILE SWIPE NAVIGATION SCRIPT
+    // This allows Ethan & Alesa to swipe between Add Entry, Visuals, and History
+    let touchstartX = 0;
+    let touchendX = 0;
+    const minSwipeDistance = 70;
+
+    function handleSwipe() {
+        const tabs = window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
+        if (tabs.length === 0) return;
+
+        let activeIndex = -1;
+        tabs.forEach((tab, index) => {
+            if (tab.getAttribute('aria-selected') === 'true') activeIndex = index;
+        });
+
+        if (touchendX < touchstartX - minSwipeDistance) {
+            // Swipe Left -> Go to tab on the Right
+            if (activeIndex < tabs.length - 1) tabs[activeIndex + 1].click();
+        }
+        if (touchendX > touchstartX + minSwipeDistance) {
+            // Swipe Right -> Go to tab on the Left
+            if (activeIndex > 0) tabs[activeIndex - 1].click();
+        }
+    }
+
+    // Attach to the main container
+    const mainContainer = window.parent.document.querySelector('[data-testid="stMain"]');
+    if (mainContainer) {
+        mainContainer.addEventListener('touchstart', e => {
+            touchstartX = e.changedTouches[0].screenX;
+        }, {passive: true});
+
+        mainContainer.addEventListener('touchend', e => {
+            touchendX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, {passive: true});
+    }
+    </script>
     """, unsafe_allow_html=True)
 
 # --- AUTHENTICATION ---
@@ -133,6 +169,9 @@ if not st.session_state["authenticated"]:
     
     u = st.text_input("Username").lower()
     p = st.text_input("Password", type="password")
+    
+    # 30px Buffer added here before Remember Me
+    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     remember_me = st.checkbox("Remember me", value=True)
     
     # 30px Buffer before Login button
@@ -233,12 +272,9 @@ def edit_dialog(row_index, row_data):
 @st.dialog("Manage Category")
 def manage_cat_dialog(old_name, cat_type):
     st.write(f"Managing **{cat_type}**: {old_name}")
-    
     new_type = st.selectbox("Designation", ["Expense", "Income"], index=0 if cat_type == "Expense" else 1)
     new_name = st.text_input("Category Name", value=old_name)
-    
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
-    
     c1, c2 = st.columns(2)
     with c1:
         if st.button("💾 Save Changes", use_container_width=True):
@@ -247,19 +283,15 @@ def manage_cat_dialog(old_name, cat_type):
                 df_c.loc[mask_c, "Name"] = new_name
                 df_c.loc[mask_c, "Type"] = new_type
                 conn.update(worksheet="categories", data=df_c)
-                
                 mask_t = (df_t["Category"] == old_name)
                 df_t.loc[mask_t, "Category"] = new_name
                 df_t.loc[mask_t, "Type"] = new_type
-                
                 df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
                 conn.update(worksheet="transactions", data=df_t)
                 st.success("Updated everywhere!")
                 time.sleep(1)
                 st.rerun()
-            else:
-                st.warning("No changes made.")
-                
+            else: st.warning("No changes made.")
     with c2:
         if st.button("🗑️ Delete", use_container_width=True):
             new_c = df_c[~((df_c["Type"] == cat_type) & (df_c["Name"] == old_name))]
@@ -372,7 +404,6 @@ with st.sidebar:
         st.query_params.clear()
         st.rerun()
     st.divider()
-    
     st.header("Categories")
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
@@ -387,7 +418,6 @@ with st.sidebar:
                 st.success("Added!")
                 time.sleep(0.5)
                 st.rerun()
-    
     st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
     st.header("Manage Existing Category")
     with st.container(border=True):
@@ -396,5 +426,4 @@ with st.sidebar:
         target_cat = st.selectbox("Select Category", manage_list, key="m_list")
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
         if st.button("🔧 Manage Category", use_container_width=True):
-            if target_cat:
-                manage_cat_dialog(target_cat, manage_type)
+            if target_cat: manage_cat_dialog(target_cat, manage_type)
