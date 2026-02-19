@@ -94,29 +94,36 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data_safe():
     st.cache_data.clear()
     try:
-        t_df = conn.read(worksheet="transactions", ttl=0, dtype=str)
-        c_df = conn.read(worksheet="categories", ttl=0, dtype=str)
+        # Read with default types, then clean manually
+        t_df = conn.read(worksheet="transactions", ttl=0)
+        c_df = conn.read(worksheet="categories", ttl=0)
         
+        # --- CLEAN TRANSACTIONS ---
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
+            
+            # Ensure columns exist
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
+            # FIX: Force .astype(str) first so .str accessor always works
             t_df["Amount"] = t_df["Amount"].astype(str).str.replace(r'[$,]', '', regex=True)
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
+            
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
 
+        # --- CLEAN CATEGORIES ---
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
             c_df = pd.DataFrame(columns=["Type", "Name"])
             
         return t_df, c_df
-    except Exception:
+    except Exception as e:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data_safe()
@@ -218,6 +225,7 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
+        # Sort
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
@@ -237,18 +245,20 @@ with tab3:
             # Format Data
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
-            
-            # Icons and Styling
+            amt_str = f"${row['Amount']:,.0f}"
             icon = get_icon(row['Category'], row['Type'])
+            
+            # Colors: Green for Income, Red for Expense
+            # We apply this directly to the text color of the Price
+            text_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
-            color = "#d32f2f" if is_ex else "#2e7d32" # Red or Green
             
             # 1. VISUAL CARD (HTML)
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{color};">{prefix}${row['Amount']:,.0f}</div>
+                    <div class="tr-amt" style="color:{text_color};">{prefix}{amt_str}</div>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -257,6 +267,7 @@ with tab3:
             if st.button(f"btn_{i}", key=f"h_{i}", label_visibility="hidden"):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
+                
     else:
         st.info("History is empty.")
 
