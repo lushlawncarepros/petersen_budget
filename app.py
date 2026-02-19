@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Perfectly Aligned Overlay Buttons
+# CSS: Perfectly Aligned Overlay Buttons with Nudged Font
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -22,23 +22,24 @@ st.markdown("""
     }
     
     /* 1. THE ROW CONTAINER */
-    /* This creates a relative parent so the button can be positioned absolutely on top */
     .row-container {
         position: relative;
         width: 100%;
-        height: 45px; /* Fixed height for perfect alignment */
-        margin-bottom: 8px; /* Natural spacing between rows */
+        height: 45px; 
+        margin-bottom: 8px; 
     }
     
     /* 2. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
+        /* Aligns text vertically, but we add padding-top to "push" font down more */
         align-items: center; 
         justify-content: space-between;
         background-color: var(--secondary-background-color);
         border-radius: 8px;
-        padding: 0 12px; 
-        height: 45px; /* Matches container */
+        /* Added 5px padding-top to move the font down in relation to the button */
+        padding: 5px 12px 0 12px !important; 
+        height: 45px; 
         width: 100%;
         position: absolute;
         top: 0;
@@ -46,6 +47,7 @@ st.markdown("""
         z-index: 1;
         font-family: "Source Sans Pro", sans-serif;
         border: 1px solid rgba(128, 128, 128, 0.1);
+        box-sizing: border-box;
     }
     
     .tr-date { width: 20%; font-size: 0.9rem; font-weight: 700; opacity: 0.8; }
@@ -53,7 +55,6 @@ st.markdown("""
     .tr-amt { width: 30%; font-size: 1.1rem; font-weight: 800; text-align: right; }
     
     /* 3. THE CLICK LAYER (The Streamlit Button) */
-    /* We target the Streamlit element container inside our row-container to force it to overlap */
     .row-container div[data-testid="element-container"] {
         position: absolute !important;
         top: 0 !important;
@@ -279,7 +280,6 @@ with tab3:
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
             
-            # This container now wraps both layers and forces them to align perfectly
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="trans-row">
