@@ -15,7 +15,7 @@ st.markdown("""
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* 3. LAYOUT SPACING - Streamlit Internal Block Gap: 0rem */
+    /* LAYOUT SPACING - Streamlit Internal Block Gap: 0rem */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* --- TAB STYLING --- */
@@ -24,7 +24,7 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. LAYOUT SPACING - Row Container Height: 25px; margin-bottom: 0px */
+    /* Row Container Height: 25px; margin-bottom: 0px */
     .row-container {
         position: relative; 
         height: 25px; 
@@ -40,9 +40,8 @@ st.markdown("""
         justify-content: space-between;
         background-color: var(--secondary-background-color);
         border-radius: 8px;
-        /* Padding: Top 0px, Right 12px, Bottom 0px, Left 12px */
         padding: 0px 12px 0px 12px !important; 
-        height: 40px; /* Total Height: 40px */
+        height: 40px; 
         width: 100%;
         position: absolute;
         top: 0; 
@@ -161,6 +160,7 @@ def load_data_clean():
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
+            # Correcting the apply method to ensure data visibility
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
@@ -185,25 +185,26 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
-    # Decoy element to steal initial focus from the date input
     st.markdown('<div class="decoy-focus"><button nonce="decoy"></button></div>', unsafe_allow_html=True)
-    
     st.write(f"Editing: **{row_data['Category']}**")
+    
     e_date = st.date_input("Date", row_data["Date"])
     cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
-    e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
-    # 30px buffer requested
-    st.markdown('<div style="margin-bottom: 30px;"></div>', unsafe_allow_html=True)
+    # Using text_input for easier mobile editing (select-all-and-replace behavior)
+    e_amt_str = st.text_input("Amount ($)", value=f"{float(row_data['Amount']):.2f}")
+    
+    # 30px buffer between Amount and buttons
+    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
     with c1:
         if st.button("✅ Update", use_container_width=True):
             df_t.at[row_index, "Date"] = pd.to_datetime(e_date)
             df_t.at[row_index, "Category"] = e_cat
-            df_t.at[row_index, "Amount"] = e_amt
+            df_t.at[row_index, "Amount"] = safe_float(e_amt_str)
             df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
             conn.update(worksheet="transactions", data=df_t)
             st.success("Updated!")
@@ -229,9 +230,12 @@ with tab1:
         f_date = st.date_input("Date", datetime.now())
         f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
-        f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
+        
+        # value=None allows typing to start in the "ones" place immediately
+        f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
+        
         if st.form_submit_button("Save"):
-            if f_cats:
+            if f_cats and f_amt is not None:
                 latest_t, _ = load_data_clean()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date), "Type": t_type, "Category": f_cat,
@@ -243,6 +247,8 @@ with tab1:
                 st.success(f"Saved {f_cat}!")
                 time.sleep(1)
                 st.rerun()
+            elif f_amt is None:
+                st.error("Please enter an amount.")
             else: st.error("Please add a category first!")
 
 with tab2:
