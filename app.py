@@ -8,7 +8,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Clean White Lists with Invisible Click Overlay
+# CSS: Refined Mobile List
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -17,38 +17,55 @@ st.markdown("""
     /* Remove default spacing */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
-    /* 1. VISUAL CARD STYLING (White Row) */
+    /* 1. VISUAL CARD STYLING */
     .trans-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         background-color: white;
-        border-bottom: 1px solid #f0f2f6;
+        border-bottom: 1px solid #e0e0e0; /* Slightly darker border */
         padding: 12px 5px;
         height: 55px;
         font-family: "Source Sans Pro", sans-serif;
     }
     
-    /* Column Spacing */
-    .tr-date { width: 18%; font-size: 0.75rem; color: #999; font-weight: 500; }
-    .tr-cat  { width: 52%; font-size: 0.9rem; color: #333; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; }
-    .tr-amt  { width: 30%; font-size: 0.95rem; font-weight: 700; text-align: right; }
+    /* Column Spacing & Visibility */
+    .tr-date { 
+        width: 18%; 
+        font-size: 0.75rem; 
+        color: #444; /* Darker Date Text for readability */
+        font-weight: 600; 
+    }
+    .tr-cat { 
+        width: 52%; 
+        font-size: 0.9rem; 
+        color: #222; 
+        font-weight: 600; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        padding-right: 5px; 
+    }
+    .tr-amt { 
+        width: 30%; 
+        font-size: 0.95rem; 
+        font-weight: 800; 
+        text-align: right; 
+    }
     
     /* 2. INVISIBLE BUTTON OVERLAY */
-    /* We style the button to be completely transparent and cover the row */
     .row-overlay button {
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
-        width: 100%;
         height: 55px; 
-        margin-top: -55px; 
+        margin-top: -55px; /* Pulls button UP to cover the row */
         z-index: 5;
         cursor: pointer;
     }
     
     .row-overlay button:hover {
-        background-color: rgba(0,0,0,0.02) !important;
+        background-color: rgba(0,0,0,0.03) !important;
     }
     
     /* Global Button Polish */
@@ -108,6 +125,7 @@ def safe_float(val):
 def load_data_robust():
     st.cache_data.clear()
     try:
+        # Read standard
         t_df = conn.read(worksheet="transactions", ttl=0)
         c_df = conn.read(worksheet="categories", ttl=0)
         
@@ -118,9 +136,10 @@ def load_data_robust():
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # Use safe float conversion
+            # Safe conversion
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
             
+            # Date Handling
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
@@ -255,6 +274,7 @@ with tab3:
             amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             
+            # Colors
             if is_ex:
                 prefix = "-"
                 amt_color = "#d32f2f" # Red
@@ -273,10 +293,10 @@ with tab3:
                 </div>
             """, unsafe_allow_html=True)
             
-            # 2. CLICK OVERLAY
-            # Removed label_visibility="hidden" to prevent error
+            # 2. CLICK OVERLAY (Full Width Button)
             st.markdown('<div class="row-overlay">', unsafe_allow_html=True)
-            if st.button(" ", key=f"h_{i}"):
+            # KEY FIX: use_container_width=True makes the button match the div width
+            if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
