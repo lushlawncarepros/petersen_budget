@@ -508,14 +508,28 @@ with tab_budget:
         if headers.empty:
             st.caption("No headings yet.")
         else:
-            for _, r in headers.iterrows():
-                cc1, cc2 = st.columns([4, 1])
-                # Visual preview of the heading
-                cc1.markdown(f"<div style='background-color:{r['Color']}; color:#fff; text-align:center; padding:4px; border-radius:4px; font-weight:bold; font-size:0.85rem;'>{r['Name']} (Order: {r['Order']})</div>", unsafe_allow_html=True)
-                if cc2.button("🗑️", key=f"del_h_{r['Name']}"):
-                    new_c = df_c[df_c["Name"] != r["Name"]]
-                    conn.update(worksheet="categories", data=new_c)
-                    st.rerun()
+            inc_headers = headers[headers["Type"] == "Income Header"].sort_values(by="Order")
+            exp_headers = headers[headers["Type"] == "Expense Header"].sort_values(by="Order")
+            
+            if not inc_headers.empty:
+                st.caption("💰 Income Headings")
+                for _, r in inc_headers.iterrows():
+                    cc1, cc2 = st.columns([4, 1])
+                    cc1.markdown(f"<div style='background-color:{r['Color']}; color:#fff; text-align:center; padding:4px; border-radius:4px; font-weight:bold; font-size:0.85rem; margin-bottom:5px;'>{r['Name']} (Order: {r['Order']})</div>", unsafe_allow_html=True)
+                    if cc2.button("🗑️", key=f"del_h_{r['Name']}"):
+                        new_c = df_c[df_c["Name"] != r["Name"]]
+                        conn.update(worksheet="categories", data=new_c)
+                        st.rerun()
+            
+            if not exp_headers.empty:
+                st.caption("💸 Expense Headings")
+                for _, r in exp_headers.iterrows():
+                    cc1, cc2 = st.columns([4, 1])
+                    cc1.markdown(f"<div style='background-color:{r['Color']}; color:#fff; text-align:center; padding:4px; border-radius:4px; font-weight:bold; font-size:0.85rem; margin-bottom:5px;'>{r['Name']} (Order: {r['Order']})</div>", unsafe_allow_html=True)
+                    if cc2.button("🗑️", key=f"del_h_{r['Name']}"):
+                        new_c = df_c[df_c["Name"] != r["Name"]]
+                        conn.update(worksheet="categories", data=new_c)
+                        st.rerun()
 
 with tab2:
     if not df_t.empty:
