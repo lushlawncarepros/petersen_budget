@@ -9,37 +9,41 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Theme-Aware Layout with Green Accents
-# This CSS targets the primary color variables directly to turn accents Green 
-# while allowing the "System" theme toggle to remain functional.
+# CSS: Theme-Aware Layout with Green Accents (Radios, Checkboxes, and Tabs)
 st.markdown("""
     <style>
-    /* 1. GLOBAL PRIMARY COLOR (Turn Red to Green) */
+    /* 1. GLOBAL PRIMARY COLOR OVERRIDE */
     :root {
         --primary-color: #2e7d32;
     }
     
-    /* Target Streamlit's internal primary color variables */
-    [data-testid="stAppViewContainer"] {
-        --primary-color: #2e7d32;
-    }
-
-    /* 2. TAB STYLING: Bold, Large, and Green Accents */
+    /* 2. TAB STYLING: Bold and Green when selected */
     button[data-baseweb="tab"] p {
-        font-size: 1.5rem !important; 
+        font-size: 1.35rem !important; 
         font-weight: 800 !important;
-        transition: color 0.3s ease;
     }
-    
-    /* Selected Tab Text and Underline */
     button[aria-selected="true"] p {
         color: #2e7d32 !important;
     }
     div[data-baseweb="tab-highlight"] {
         background-color: #2e7d32 !important;
     }
+
+    /* 3. RADIO BUTTONS & CHECKBOXES: Force Green */
+    /* Target the inner circle of Radio buttons and the box of Checkboxes */
+    div[data-testid="stRadio"] input:checked + div,
+    div[data-testid="stCheckbox"] input:checked + div {
+        background-color: #2e7d32 !important;
+        border-color: #2e7d32 !important;
+    }
     
-    /* 3. TRANSACTION ROW STYLING (Transparent for Dark Mode support) */
+    /* Target the focus ring/hover state */
+    div[data-testid="stRadio"] input:focus + div,
+    div[data-testid="stCheckbox"] input:focus + div {
+        box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2) !important;
+    }
+
+    /* 4. TRANSACTION ROW STYLING (Transparent for Dark Mode support) */
     .row-container {
         position: relative; 
         height: 60px; 
@@ -71,7 +75,7 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 4. CLICK LAYER (Transparent Button) */
+    /* 5. CLICK LAYER (Transparent Button) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -97,7 +101,7 @@ st.markdown("""
         background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* 5. LEDGER HEADERS: Small and Bold */
+    /* 6. LEDGER HEADERS: Small and Bold */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -109,7 +113,7 @@ st.markdown("""
         background-color: transparent;
     }
 
-    /* 6. GENERAL UI CLEANUP */
+    /* 7. GENERAL UI CLEANUP */
     div[data-testid="stSidebarNav"] { display: none; }
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     div[data-testid="stPopover"] { width: 100%; margin-top: 25px !important; }
