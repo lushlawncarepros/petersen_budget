@@ -9,20 +9,9 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Primary Color Override and High-Contrast Layout
+# CSS: High-Contrast Layout with Vertical Alignment Fixes
 st.markdown("""
     <style>
-    /* GLOBAL THEME OVERRIDE: Try to force primary color to Green */
-    :root {
-        --primary-color: #2e7d32 !important;
-    }
-    
-    /* Target Streamlit's internal checkbox color variable */
-    div[data-testid="stCheckbox"] input:checked ~ div {
-        background-color: #2e7d32 !important;
-        border-color: #2e7d32 !important;
-    }
-
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
@@ -45,7 +34,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* 20px bottom padding shifts text up for perfect vertical balance */
+        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -84,14 +73,18 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Ledger Header - Large 1.5rem labels */
+    .row-container .stButton button:hover {
+        background-color: rgba(0,0,0,0.03) !important;
+    }
+    
+    /* Ledger Header - Reduced font size for cleaner look */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
         border-bottom: 2px solid #eee; 
         color: #111;
-        font-size: 1.5rem; 
+        font-size: 1.0rem; 
         font-weight: 800;
         text-transform: uppercase;
         background-color: white;
