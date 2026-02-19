@@ -158,7 +158,6 @@ def load_data_clean():
         c_df = conn.read(worksheet="categories", ttl=0)
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
-            # Ensure all required columns exist, including the new 'Memo'
             for col in ["Date", "Type", "Category", "Amount", "User", "Memo"]:
                 if col not in t_df.columns: t_df[col] = ""
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
@@ -185,20 +184,25 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
+    # Hidden button to steal initial focus from the date input
     st.markdown('<div class="decoy-focus"><button nonce="focus-fix"></button></div>', unsafe_allow_html=True)
-    st.write(f"Editing: **{row_data['Category']}**")
+    
+    # Updated text to include "Entry Created by"
+    st.markdown(f"Editing: **{row_data['Category']}** &nbsp; | &nbsp; Entry Created by: **{row_data.get('User', 'Unknown')}**")
     
     e_date = st.date_input("Date", row_data["Date"])
     cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     
-    # Memo added to editing view
-    e_memo = st.text_input("Memo", value=str(row_data.get("Memo", "")))
+    # Ensure 'nan' doesn't show up in the text box
+    raw_memo = str(row_data.get("Memo", ""))
+    memo_val = "" if raw_memo.lower() == "nan" else raw_memo
+    e_memo = st.text_input("Memo", value=memo_val)
     
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
-    # 30px Buffer
+    # 30px Buffer before action buttons
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -234,7 +238,6 @@ with tab1:
         f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
         
-        # New Memo field
         f_memo = st.text_input("Memo", placeholder="Optional details (e.g. car savings)")
         
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
