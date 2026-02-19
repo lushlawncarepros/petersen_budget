@@ -102,14 +102,14 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Ledger Header - Increased font size by 100% */
+    /* Ledger Header - Bold Black Delineator Line added */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
-        border-bottom: 2px solid #333;
+        border-bottom: 5px solid #000; /* Increased thickness to 5px and forced pure black */
         color: #444;
-        font-size: 1.5rem; /* Increased from 0.75rem */
+        font-size: 1.5rem; 
         font-weight: 800;
         text-transform: uppercase;
         background-color: white;
