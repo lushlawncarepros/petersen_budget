@@ -1,3 +1,4 @@
+# (Full code updated with theme-aware CSS)
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,18 +10,25 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Fully Transparent/Theme-Aware Rows
+# CSS: Surgical Theme Overrides
+# 1. We force the "Primary Color" variable to Green (replaces all red accents)
+# 2. We keep rows transparent so they follow the Dark/Light theme automatically
 st.markdown("""
     <style>
+    /* GLOBAL THEME FIX: Change all "Red" accents to "Green" without breaking themes */
+    :root {
+        --primary-color: #2e7d32 !important;
+    }
+    
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove vertical gaps between block elements */
+    /* Remove vertical gaps */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* --- TAB STYLING --- */
     button[data-baseweb="tab"] p {
-        font-size: 1.2rem !important; 
+        font-size: 1.35rem !important; 
         font-weight: 800 !important;
     }
     
@@ -30,7 +38,7 @@ st.markdown("""
         height: 60px; 
         margin-bottom: 2px;
         width: 100%;
-        background-color: transparent; /* Changed to transparent */
+        background-color: transparent; 
     }
     
     /* 1. VISUAL LAYER (Text) */
@@ -38,9 +46,8 @@ st.markdown("""
         display: flex;
         align-items: center; 
         justify-content: space-between;
-        background-color: transparent; /* Changed to transparent to follow theme */
-        border-bottom: 1px solid rgba(128, 128, 128, 0.2); /* Faint line for both modes */
-        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
+        background-color: transparent;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -51,14 +58,13 @@ st.markdown("""
         pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
         overflow: hidden;
-        color: inherit; /* Inherit text color from Streamlit theme */
     }
     
-    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; opacity: 0.9; }
+    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; }
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. THE CLICK LAYER (Button Overlay) */
+    /* 2. THE CLICK LAYER */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -81,10 +87,10 @@ st.markdown("""
     }
     
     .row-container .stButton button:hover {
-        background-color: rgba(128,128,128,0.05) !important;
+        background-color: rgba(128,128,128,0.08) !important;
     }
     
-    /* Ledger Header */
+    /* Ledger Header - Balanced Size */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -97,15 +103,8 @@ st.markdown("""
     }
 
     /* --- FILTER UI SPACING --- */
-    div[data-testid="stPopover"] { 
-        width: 100%; 
-        margin-top: 25px !important; 
-    }
-    
-    div[data-testid="stCheckbox"] { 
-        margin-bottom: 12px !important; 
-        padding-top: 5px !important;
-    }
+    div[data-testid="stPopover"] { width: 100%; margin-top: 25px !important; }
+    div[data-testid="stCheckbox"] { margin-bottom: 12px !important; padding-top: 5px !important; }
 
     .stButton>button { border-radius: 12px; }
     </style>
