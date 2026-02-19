@@ -9,15 +9,15 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Theme-Aware Layout with Green Accents (Radios, Checkboxes, and Tabs)
+# CSS: High-Contrast Layout with Precise Green Accents
 st.markdown("""
     <style>
-    /* 1. GLOBAL PRIMARY COLOR OVERRIDE */
+    /* 1. GLOBAL PRIMARY COLOR */
     :root {
         --primary-color: #2e7d32;
     }
-    
-    /* 2. TAB STYLING: Bold and Green when selected */
+
+    /* 2. TAB STYLING: Bold and Green when active */
     button[data-baseweb="tab"] p {
         font-size: 1.35rem !important; 
         font-weight: 800 !important;
@@ -29,21 +29,22 @@ st.markdown("""
         background-color: #2e7d32 !important;
     }
 
-    /* 3. RADIO BUTTONS & CHECKBOXES: Force Green */
-    /* Target the inner circle of Radio buttons and the box of Checkboxes */
-    div[data-testid="stRadio"] input:checked + div,
-    div[data-testid="stCheckbox"] input:checked + div {
+    /* 3. PRECISE WIDGET STYLING (Green Checkboxes & Radios) */
+    /* This targets ONLY the visual indicator box/circle */
+    div[data-testid="stCheckbox"] input:checked + div,
+    div[data-testid="stRadio"] input:checked + div {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
     }
     
-    /* Target the focus ring/hover state */
-    div[data-testid="stRadio"] input:focus + div,
-    div[data-testid="stCheckbox"] input:focus + div {
-        box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.2) !important;
+    /* This PREVENTS the text labels from being highlighted */
+    div[data-testid="stWidgetLabel"] div, 
+    div[data-testid="stWidgetLabel"] p {
+        background-color: transparent !important;
+        background: none !important;
     }
 
-    /* 4. TRANSACTION ROW STYLING (Transparent for Dark Mode support) */
+    /* 4. TRANSACTION ROW STYLING (Centering & Balance) */
     .row-container {
         position: relative; 
         height: 60px; 
@@ -75,7 +76,7 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 5. CLICK LAYER (Transparent Button) */
+    /* 5. CLICK LAYER */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -101,7 +102,7 @@ st.markdown("""
         background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* 6. LEDGER HEADERS: Small and Bold */
+    /* 6. LEDGER HEADERS: Reduced size & Bold */
     .hist-header {
         display: flex;
         justify-content: space-between;
