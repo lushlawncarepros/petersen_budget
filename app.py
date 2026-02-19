@@ -195,7 +195,7 @@ def edit_dialog(row_index, row_data):
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     
-    # Ensure 'nan' doesn't show up in the text box
+    # Memo added to editing view
     raw_memo = str(row_data.get("Memo", ""))
     memo_val = "" if raw_memo.lower() == "nan" else raw_memo
     e_memo = st.text_input("Memo", value=memo_val)
@@ -228,6 +228,10 @@ def edit_dialog(row_index, row_data):
 
 # --- MAIN APP ---
 st.title("📊 Petersen Budget")
+
+# Space added between title and tabs
+st.markdown('<div style="margin-bottom: 40px;"></div>', unsafe_allow_html=True)
+
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
 with tab1:
@@ -238,8 +242,10 @@ with tab1:
         f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
         
+        # New Memo field
         f_memo = st.text_input("Memo", placeholder="Optional details (e.g. car savings)")
         
+        # value=None allows typing to start in the "ones" place immediately
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
         
         # 30px Buffer
@@ -264,17 +270,33 @@ with tab1:
 
 with tab2:
     if not df_t.empty:
-        inc = df_t[df_t["Type"] == "Income"]["Amount"].sum()
-        exp = df_t[df_t["Type"] == "Expense"]["Amount"].sum()
-        st.metric("Net Balance", f"${(inc - exp):,.2f}", delta=f"${inc:,.2f} In")
+        # Prepare data for Sunburst (Interactive Pie Breakdown)
+        viz_df = df_t.copy()
+        # Clean Memos for the chart
+        viz_df["Memo"] = viz_df["Memo"].apply(lambda x: "Unspecified" if str(x).lower() == "nan" or str(x).strip() == "" else str(x))
+        
+        inc_val = viz_df[viz_df["Type"] == "Income"]["Amount"].sum()
+        exp_val = viz_df[viz_df["Type"] == "Expense"]["Amount"].sum()
+        st.metric("Net Balance", f"${(inc_val - exp_val):,.2f}", delta=f"${inc_val:,.2f} In")
+        
         c1, c2 = st.columns(2)
         with c1:
-            dx = df_t[df_t["Type"] == "Expense"]
-            if not dx.empty: st.plotly_chart(px.pie(dx, values="Amount", names="Category", title="Expenses"), use_container_width=True)
+            dx = viz_df[viz_df["Type"] == "Expense"]
+            if not dx.empty:
+                # Sunburst provides the interactive "Breakdown" requested
+                fig_ex = px.sunburst(dx, path=['Category', 'Memo'], values='Amount', 
+                                   title="Expenses Breakdown",
+                                   color_discrete_sequence=px.colors.qualitative.Pastel)
+                st.plotly_chart(fig_ex, use_container_width=True)
         with c2:
-            di = df_t[df_t["Type"] == "Income"]
-            if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else: st.info("No data yet.")
+            di = viz_df[viz_df["Type"] == "Income"]
+            if not di.empty:
+                fig_in = px.sunburst(di, path=['Category', 'Memo'], values='Amount', 
+                                   title="Income Breakdown",
+                                   color_discrete_sequence=px.colors.qualitative.Safe)
+                st.plotly_chart(fig_in, use_container_width=True)
+    else:
+        st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -318,15 +340,20 @@ with tab3:
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
             
+            # Show memo in parenthesis if it exists
+            memo_display = f" ({row['Memo']})" if str(row.get('Memo', '')) != 'nan' and str(row.get('Memo', '')).strip() != '' else ''
+            
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
+            # The visual text row
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date"><span>{d_str}</span></div>
-                    <div class="tr-cat">{icon} {row['Category']} {f"({row['Memo']})" if str(row.get('Memo', '')) != 'nan' and str(row.get('Memo', '')) != '' else ''}</div>
+                    <div class="tr-cat">{icon} {row['Category']}{memo_display}</div>
                     <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
             
+            # The actual Streamlit button (made invisible by CSS)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
