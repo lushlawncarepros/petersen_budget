@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Precise Checkbox Coloring
+# CSS: High-Contrast Layout with Vertical Alignment Fixes
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -34,7 +34,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* 20px bottom padding shifts text up for perfect vertical balance */
+        /* 20px bottom padding to shift text up for perfect vertical balance */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -90,7 +90,7 @@ st.markdown("""
         background-color: white;
     }
 
-    /* --- FILTER UI SPACING & COLORS --- */
+    /* --- FILTER UI SPACING --- */
     
     div[data-testid="stPopover"] { 
         width: 100%; 
@@ -100,27 +100,6 @@ st.markdown("""
     div[data-testid="stCheckbox"] { 
         margin-bottom: 12px !important; 
         padding-top: 5px !important;
-    }
-    
-    /* PRECISE CHECKBOX COLORS */
-    /* Target only the first div after the input (the actual box) */
-    
-    /* 1. Default (Expenses) = Red */
-    [data-testid="stCheckbox"] input:checked + div {
-        background-color: #d32f2f !important;
-        border-color: #d32f2f !important;
-    }
-
-    /* 2. Income Sections = Green */
-    .element-container:has(.income-marker) ~ .element-container [data-testid="stCheckbox"] input:checked + div {
-        background-color: #2e7d32 !important;
-        border-color: #2e7d32 !important;
-    }
-
-    /* 3. Re-reset following sections (Expenses) = Red */
-    .element-container:has(.expense-marker) ~ .element-container [data-testid="stCheckbox"] input:checked + div {
-        background-color: #d32f2f !important;
-        border-color: #d32f2f !important;
     }
 
     .stButton>button { border-radius: 12px; }
@@ -277,19 +256,15 @@ with tab3:
                 end_f = st.date_input("To", last_day)
             
             with st.popover("Select Categories"):
-                # INVISIBLE MARKER for Income section
-                st.markdown('<div class="income-marker"></div>', unsafe_allow_html=True)
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
-                sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
+                sel_inc = [cat for cat in inc_list if st.checkbox(f"🟢 {cat}", value=True, key=f"f_inc_{cat}")]
                 
                 st.divider()
                 
-                # INVISIBLE MARKER for Expense section
-                st.markdown('<div class="expense-marker"></div>', unsafe_allow_html=True)
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
-                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
+                sel_exp = [cat for cat in exp_list if st.checkbox(f"🔴 {cat}", value=True, key=f"f_exp_{cat}")]
                 
                 all_selected = sel_inc + sel_exp
 
