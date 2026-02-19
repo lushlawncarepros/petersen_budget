@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Vertical Alignment Fixes
+# CSS: High-Contrast Layout with Vertical Alignment Fixes and Large Tabs
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -17,6 +17,14 @@ st.markdown("""
     
     /* Remove vertical gaps between block elements */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
+    
+    /* --- TAB STYLING --- */
+    /* Target the tab labels to double size and bold */
+    button[data-baseweb="tab"] p {
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        color: #111 !important;
+    }
     
     /* THE ROW CONTAINER */
     .row-container {
@@ -77,7 +85,7 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Ledger Header - Reduced font size for cleaner look */
+    /* Ledger Header - Refined Size */
     .hist-header {
         display: flex;
         justify-content: space-between;
