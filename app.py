@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Compact 30px Row Height with Forced 15px Buttons
+# CSS: Compact 30px Row Height with Custom Padding-Adjusted Buttons
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -20,7 +20,7 @@ st.markdown("""
     [data-testid="stVerticalBlock"] > div { margin: 0 !important; padding: 0 !important; }
     [data-testid="element-container"] { margin: 0 !important; padding: 0 !important; }
     
-    /* 2. TAB STYLING: Bold and Prominent (1.35rem) */
+    /* 2. TAB STYLING: Bold (1.35rem) */
     button[data-baseweb="tab"] p {
         font-size: 1.35rem !important; 
         font-weight: 800 !important;
@@ -58,32 +58,32 @@ st.markdown("""
     .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
     
-    /* 4. THE BUTTON OVERLAY (Forced to 15px via Padding/Min-Height) */
+    /* 4. THE BUTTON OVERLAY (Using Padding to force height and position) */
     .row-container .stButton {
         position: absolute;
-        top: 7.5px; /* (30 - 15) / 2 */
+        top: 0; /* Forced to the top */
         left: 0;
         width: 100%;
-        height: 15px;
         z-index: 5;
     }
     
     .row-container .stButton button {
-        /* Reset all Streamlit defaults */
+        /* Ethan's Padding Adjustment Strategy */
         height: 15px !important;
+        padding-top: 0px !important;
+        padding-bottom: 20px !important; /* Increased padding below to force up */
         min-height: 0px !important;
-        padding: 0px !important;
-        line-height: 1 !important;
+        line-height: 0 !important;
         
         background-color: transparent !important;
         color: transparent !important;
+        
+        /* Nuclear reset of outlines/borders */
         border: none !important;
+        border-width: 0 !important;
+        border-style: none !important;
         box-shadow: none !important;
         outline: none !important;
-        
-        /* Ensure no border shows at all */
-        border-style: none !important;
-        border-width: 0 !important;
         
         width: 100% !important;
         display: block !important;
@@ -91,14 +91,14 @@ st.markdown("""
     }
     
     .row-container .stButton button:hover {
-        background-color: rgba(128,128,128,0.1) !important;
+        background-color: rgba(128,128,128,0.05) !important;
     }
     
     /* Ledger Header Labels */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 6px 12px;
+        padding: 6px 10px;
         border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
         font-size: 0.9rem; 
         font-weight: 800;
@@ -109,7 +109,7 @@ st.markdown("""
 
     /* General UI Tweaks */
     div[data-testid="stPopover"] { width: 100%; margin-top: 10px !important; }
-    .stButton>button { border-radius: 12px; }
+    .stButton>button { border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
