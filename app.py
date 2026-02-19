@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Compact 30px Row Height with 15px Buttons
+# CSS: Compact 30px Row Height with Forced 15px Buttons
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -26,24 +26,24 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. THE ROW CONTAINER (Strict 30px height) */
+    /* 3. THE ROW CONTAINER (30px) */
     .row-container {
         position: relative; 
         height: 30px; 
-        margin-bottom: 2px; /* The 2px gap requested */
+        margin-bottom: 2px;
         width: 100%;
         background-color: var(--secondary-background-color); 
         border-radius: 4px;
         overflow: hidden;
     }
     
-    /* VISUAL LAYER (Text) - Perfectly centered in the 30px height */
+    /* VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
-        padding: 0 10px; 
+        padding: 0 12px; 
         height: 30px;
         width: 100%;
         position: absolute;
@@ -58,10 +58,10 @@ st.markdown("""
     .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
     
-    /* CLICK LAYER (Invisible Button Overlay) - Height set to 15px */
+    /* 4. THE BUTTON OVERLAY (Forced to 15px via Padding/Min-Height) */
     .row-container .stButton {
         position: absolute;
-        top: 7.5px; /* Centered vertically (30 - 15) / 2 */
+        top: 7.5px; /* (30 - 15) / 2 */
         left: 0;
         width: 100%;
         height: 15px;
@@ -69,18 +69,23 @@ st.markdown("""
     }
     
     .row-container .stButton button {
+        /* Reset all Streamlit defaults */
+        height: 15px !important;
+        min-height: 0px !important;
+        padding: 0px !important;
+        line-height: 1 !important;
+        
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
-        /* Aggressive reset to remove grey outlines */
+        
+        /* Ensure no border shows at all */
         border-style: none !important;
-        background: transparent !important;
+        border-width: 0 !important;
+        
         width: 100% !important;
-        height: 15px !important;
-        padding: 0 !important;
-        margin: 0 !important;
         display: block !important;
         cursor: pointer;
     }
@@ -89,11 +94,11 @@ st.markdown("""
         background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* Ledger Header Labels (Proportional to 30px rows) */
+    /* Ledger Header Labels */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 6px 10px;
+        padding: 6px 12px;
         border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
         font-size: 0.9rem; 
         font-weight: 800;
@@ -241,8 +246,7 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else:
-        st.info("No data yet.")
+    else: st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -277,7 +281,6 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
-        # history list
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
