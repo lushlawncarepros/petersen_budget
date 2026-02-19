@@ -382,6 +382,9 @@ with st.sidebar:
     manage_list = sorted(df_c[df_c["Type"] == manage_type]["Name"].unique().tolist())
     target_cat = st.selectbox("Select Category", manage_list, key="m_list")
     
+    # 30px Buffer added here to match the form above
+    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+    
     if st.button("🔧 Manage Selected", use_container_width=True):
         if target_cat:
             manage_cat_dialog(target_cat, manage_type)
