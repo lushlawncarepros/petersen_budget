@@ -9,113 +9,112 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Ultra-Compact Ledger & Forced Mobile Grid
+# CSS: High-Contrast "Nailed It" Layout
 st.markdown("""
     <style>
-    /* 1. GLOBAL UI */
+    /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
+    
+    /* Remove vertical gaps between rows */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    .stButton>button { border-radius: 4px; }
-
-    /* 2. ULTRA-TIGHT LEDGER (20px) */
+    
+    /* THE ROW CONTAINER */
     .row-container {
         position: relative; 
-        height: 20px; /* Requested 20px height */
-        margin-bottom: 0px; 
+        height: 60px; /* Restored to 60px */
+        margin-bottom: 2px;
         width: 100%;
-        overflow: hidden;
     }
+    
+    /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         background-color: white;
-        border-bottom: 1px solid #f0f0f0;
-        padding: 0 8px;
-        height: 20px;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 0 10px;
+        height: 60px;
         width: 100%;
         position: absolute;
         top: 0;
         left: 0;
         z-index: 1;
-        pointer-events: none;
-        line-height: 20px;
+        pointer-events: none; /* Touches pass through to the button underneath */
+        font-family: "Source Sans Pro", sans-serif;
     }
-    .tr-date { width: 22%; font-size: 0.7rem; color: #000; font-weight: 800; }
-    .tr-cat { width: 48%; font-size: 0.75rem; color: #333; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 0.75rem; font-weight: 900; text-align: right; }
     
-    /* Click Layer - Scaled to 20px */
-    .row-container .stButton { position: absolute; top: 0; left: 0; width: 100%; height: 20px; z-index: 5; }
+    /* Darkened Date Text for high visibility */
+    .tr-date { 
+        width: 20%; 
+        font-size: 0.85rem; 
+        color: #111; /* Solid Black */
+        font-weight: 700; 
+    }
+    .tr-cat { 
+        width: 50%; 
+        font-size: 0.95rem; 
+        color: #222; 
+        font-weight: 600; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+    }
+    .tr-amt { 
+        width: 30%; 
+        font-size: 1.05rem; 
+        font-weight: 800; 
+        text-align: right; 
+    }
+    
+    /* 2. THE CLICK LAYER (Button Overlay) */
+    .row-container .stButton {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 60px;
+        z-index: 5;
+    }
+    
     .row-container .stButton button {
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
         width: 100% !important;
-        height: 20px !important;
+        height: 60px !important;
         padding: 0 !important;
         margin: 0 !important;
+        display: block !important;
         cursor: pointer;
     }
-
-    /* 3. FILTER UI: FORCE FIT TO SCREEN */
-    /* Target the container for the date columns */
-    div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        width: 100% !important;
-        gap: 4px !important;
-        margin-top: 5px !important;
+    
+    .row-container .stButton button:hover {
+        background-color: rgba(0,0,0,0.03) !important;
     }
-
-    /* Target columns to be exactly 50% minus gap */
-    div[data-testid="column"] {
-        flex: 1 1 48% !important;
-        min-width: 0 !important;
-        width: 48% !important;
-    }
-
-    /* Shrink the date picker boxes */
-    div[data-testid="stDateInput"] label { display: none !important; }
-    div[data-testid="stDateInput"] div[data-baseweb="input"] {
-        height: 32px !important;
-        min-height: 32px !important;
-    }
-    div[data-testid="stDateInput"] input {
-        font-size: 0.7rem !important;
-        padding: 0 4px !important;
-    }
-
-    .filter-header-text {
-        font-size: 0.65rem;
-        font-weight: 900;
-        color: #999;
-        margin-bottom: 2px;
-        padding-top: 10px; /* Space so it's not covered */
-        text-transform: uppercase;
-    }
-
-    /* Ledger Header (Tighter) */
+    
+    /* Ledger Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 4px 8px;
-        border-bottom: 1px solid #333;
-        color: #666;
-        font-size: 0.6rem;
+        padding: 10px;
+        border-bottom: 2px solid #333;
+        color: #444;
+        font-size: 0.75rem;
         font-weight: 800;
         text-transform: uppercase;
-        background: #fafafa;
     }
 
+    /* Polish for main app buttons */
+    .stButton>button { border-radius: 12px; }
+    
     /* Popover Scaling */
-    div[data-testid="stPopover"] { width: 100%; margin-top: 4px; }
-    div[data-testid="stPopover"] button { height: 32px !important; font-size: 0.75rem !important; }
+    div[data-testid="stPopover"] { width: 100%; margin-top: 10px; }
+    div[data-testid="stCheckbox"] { margin-bottom: 8px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- AUTH ---
+# --- AUTHENTICATION ---
 USERS = {"ethan": "petersen1", "alesa": "petersen2"}
 if "authenticated" not in st.session_state:
     params = st.query_params
@@ -137,7 +136,7 @@ if not st.session_state["authenticated"]:
             st.rerun()
     st.stop()
 
-# --- DATA ENGINE ---
+# --- DATA ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_float(val):
@@ -162,8 +161,10 @@ def load_data_clean():
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
-        if c_df is not None and not c_df.empty: c_df.columns = [str(c).strip().title() for c in c_df.columns]
-        else: c_df = pd.DataFrame(columns=["Type", "Name"])
+        if c_df is not None and not c_df.empty:
+            c_df.columns = [str(c).strip().title() for c in c_df.columns]
+        else:
+            c_df = pd.DataFrame(columns=["Type", "Name"])
         return t_df, c_df
     except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
@@ -207,7 +208,7 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
-# --- APP TABS ---
+# --- MAIN APP ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
@@ -250,20 +251,18 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
+        # Default Month Range
         today = date.today()
         first_day = today.replace(day=1)
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
         with st.expander("🔍 Filter History", expanded=False):
-            # Safe label placement
-            st.markdown('<div class="filter-header-text">Date Range</div>', unsafe_allow_html=True)
-            
-            # The Columns: Forced Row with CSS
-            f_col1, f_col2 = st.columns(2)
-            with f_col1:
-                start_f = st.date_input("From", first_day, label_visibility="collapsed")
-            with f_col2:
-                end_f = st.date_input("To", last_day, label_visibility="collapsed")
+            # Restored to DEFAULT stacking/spacing
+            c1, c2 = st.columns(2)
+            with c1:
+                start_f = st.date_input("From", first_day)
+            with c2:
+                end_f = st.date_input("To", last_day)
             
             with st.popover("Filter Categories", use_container_width=True):
                 st.markdown("**Income**")
@@ -282,11 +281,10 @@ with tab3:
                 (work_df["Category"].isin(all_selected))
             ]
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.caption(f"Net: **${f_net:,.2f}** | Count: {len(work_df)}")
+            st.caption(f"Filtered Net: **${f_net:,.2f}**")
 
-        # SORTED LEDGER
         work_df = work_df.sort_values(by="Date", ascending=False)
-        st.markdown('<div class="hist-header"><div style="width:22%">DATE</div><div style="width:48%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
@@ -294,18 +292,18 @@ with tab3:
             is_ex = row['Type'] == 'Expense'
             amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
-            p_color = "#d32f2f" if is_ex else "#2e7d32" 
+            price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
             
-            # --- THE 20PX CONTAINER ---
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{p_color};">{prefix}${amt_val:,.0f}</div>
+                    <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
+            # Standard invisible button
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -321,10 +319,10 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
     st.divider()
-    st.header("Categories")
+    st.header("Manage Categories")
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
-        cn = st.text_input("New Category")
+        cn = st.text_input("New Name")
         if st.form_submit_button("Add"):
             if cn:
                 st.cache_resource.clear()
