@@ -9,16 +9,15 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Absolute Overlays, Forced Flex Rows, and Spacing
+# CSS: The "Mobile Force" Layout
 st.markdown("""
     <style>
-    /* Hide Sidebar Nav */
+    /* 1. GLOBAL UI TWEAKS */
     div[data-testid="stSidebarNav"] { display: none; }
-    
-    /* History List: No gaps between rows */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    
-    /* 1. HISTORY LEDGER STYLING */
+    .stButton>button { border-radius: 12px; }
+
+    /* 2. HISTORY LEDGER STYLING */
     .row-container {
         position: relative; 
         height: 60px; 
@@ -39,13 +38,11 @@ st.markdown("""
         left: 0;
         z-index: 1;
         pointer-events: none;
-        font-family: "Source Sans Pro", sans-serif;
     }
     .tr-date { width: 20%; font-size: 0.85rem; color: #000; font-weight: 800; }
     .tr-cat { width: 50%; font-size: 0.95rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 900; text-align: right; }
     
-    /* Click Layer */
     .row-container .stButton { position: absolute; top: 0; left: 0; width: 100%; height: 60px; z-index: 5; }
     .row-container .stButton button {
         background-color: transparent !important;
@@ -53,37 +50,39 @@ st.markdown("""
         border: none !important;
         width: 100% !important;
         height: 60px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        display: block !important;
         cursor: pointer;
     }
 
-    /* 2. FILTER UI STYLING */
-    /* Force dates to stay in one row even on mobile */
-    .force-row {
-        display: flex;
-        gap: 10px;
-        width: 100%;
-        align-items: center;
-        margin-bottom: 10px; /* Space between dates and Category button */
-    }
-    .force-row > div {
-        flex: 1;
+    /* 3. FILTER UI: FORCE SIDE-BY-SIDE ON MOBILE */
+    /* Target the container that holds st.columns */
+    [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 10px !important;
+        margin-bottom: 15px !important; /* Spacing below the date row */
     }
 
-    /* Hide standard date labels to make boxes shorter */
+    /* Target the individual columns to be 50% width */
+    [data-testid="column"] {
+        width: calc(50% - 5px) !important;
+        flex: 1 1 calc(50% - 5px) !important;
+        min-width: calc(50% - 5px) !important;
+    }
+
+    /* Make the date boxes shorter and hide internal labels */
     div[data-testid="stDateInput"] label { display: none !important; }
-    
-    .filter-section-header {
-        font-size: 0.7rem;
+    div[data-testid="stDateInput"] > div { height: 45px !important; }
+
+    .filter-group-label {
+        font-size: 0.75rem;
         font-weight: 800;
-        color: #888;
-        margin-bottom: 4px;
+        color: #666;
+        margin-bottom: 5px;
         text-transform: uppercase;
     }
 
-    /* Header for Ledger */
+    /* Ledger Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -95,9 +94,8 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    /* Polish */
-    .stButton>button { border-radius: 12px; }
-    div[data-testid="stPopover"] { width: 100%; }
+    /* Category Popover Spacing */
+    div[data-testid="stPopover"] { width: 100%; margin-top: 5px; }
     div[data-testid="stCheckbox"] { margin-bottom: 8px !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -237,22 +235,19 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # Default Month Range
         today = date.today()
         first_day = today.replace(day=1)
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
-        with st.expander("🔍 Filters", expanded=False):
-            st.markdown('<div class="filter-section-header">Date Range</div>', unsafe_allow_html=True)
+        with st.expander("🔍 Filter History", expanded=False):
+            st.markdown('<div class="filter-group-label">Date Range</div>', unsafe_allow_html=True)
             
-            # FORCED FLEX ROW for dates
-            st.markdown('<div class="force-row">', unsafe_allow_html=True)
+            # The columns here are now forced side-by-side by CSS
             col1, col2 = st.columns(2)
             with col1:
                 start_f = st.date_input("From", first_day, label_visibility="collapsed")
             with col2:
                 end_f = st.date_input("To", last_day, label_visibility="collapsed")
-            st.markdown('</div>', unsafe_allow_html=True)
             
             # Categories
             with st.popover("Filter Categories", use_container_width=True):
