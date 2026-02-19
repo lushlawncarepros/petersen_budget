@@ -24,10 +24,10 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. LAYOUT SPACING - Row Container Height changed to 40px; margin-bottom: 0px */
+    /* 3. LAYOUT SPACING - Row Container Height changed to 30px; margin-bottom: 0px */
     .row-container {
         position: relative; 
-        height: 40px; /* Changed from 45px to 40px */
+        height: 30px; /* Changed from 40px to 30px */
         margin-bottom: 0px; 
         width: 100%;
         background-color: transparent; 
@@ -64,7 +64,7 @@ st.markdown("""
         top: 0 !important;
         left: 0 !important;
         width: 100% !important;
-        height: 45px !important; /* Kept at 45px per instructions */
+        height: 45px !important;
         z-index: 5 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -77,7 +77,7 @@ st.markdown("""
         box-shadow: none !important;
         outline: none !important;
         width: 100% !important;
-        height: 45px !important; /* Total Height: 45px */
+        height: 45px !important; 
         padding: 0px !important; /* Padding: 0px */
         margin: 0px !important;  /* Margin: 0px */
         display: block !important;
