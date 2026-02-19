@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Exact Measurements
+# CSS: Layout with Focus-Select Script and Exact Measurements
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -87,19 +87,7 @@ st.markdown("""
         background-color: rgba(128,128,128,0.05) !important;
     }
     
-    /* Ledger Header Labels */
-    .hist-header {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px;
-        border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
-        font-size: 1.0rem; 
-        font-weight: 800;
-        text-transform: uppercase;
-        margin-bottom: 12px;
-    }
-
-    /* General UI Tweaks */
+    /* Filter UI Tweaks */
     div[data-testid="stPopover"] { 
         width: 100%; 
         margin-top: 15px !important; 
@@ -109,12 +97,18 @@ st.markdown("""
 
     /* Decoy CSS to hide the focus stealer */
     .decoy-focus {
-        height: 0;
-        width: 0;
-        opacity: 0;
-        position: absolute;
+        height: 0; width: 0; opacity: 0; position: absolute;
     }
     </style>
+
+    <script>
+    // Script to auto-select text when clicking into an input field (for Manage Entry)
+    document.addEventListener('focusin', (e) => {
+        if (e.target.tagName === 'INPUT') {
+            e.target.select();
+        }
+    });
+    </script>
     """, unsafe_allow_html=True)
 
 # --- AUTHENTICATION ---
@@ -160,7 +154,6 @@ def load_data_clean():
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
-            # Correcting the apply method to ensure data visibility
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
@@ -185,6 +178,7 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
+    # Hide decoy to steal initial focus from date picker
     st.markdown('<div class="decoy-focus"><button nonce="decoy"></button></div>', unsafe_allow_html=True)
     st.write(f"Editing: **{row_data['Category']}**")
     
@@ -193,10 +187,10 @@ def edit_dialog(row_index, row_data):
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     
-    # Using text_input for easier mobile editing (select-all-and-replace behavior)
+    # Text input with JS select-on-focus for better mobile UX
     e_amt_str = st.text_input("Amount ($)", value=f"{float(row_data['Amount']):.2f}")
     
-    # 30px buffer between Amount and buttons
+    # Buffer requested
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -230,10 +224,7 @@ with tab1:
         f_date = st.date_input("Date", datetime.now())
         f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
-        
-        # value=None allows typing to start in the "ones" place immediately
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
-        
         if st.form_submit_button("Save"):
             if f_cats and f_amt is not None:
                 latest_t, _ = load_data_clean()
@@ -247,8 +238,7 @@ with tab1:
                 st.success(f"Saved {f_cat}!")
                 time.sleep(1)
                 st.rerun()
-            elif f_amt is None:
-                st.error("Please enter an amount.")
+            elif f_amt is None: st.error("Please enter an amount.")
             else: st.error("Please add a category first!")
 
 with tab2:
@@ -263,8 +253,7 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else:
-        st.info("No data yet.")
+    else: st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -277,7 +266,6 @@ with tab3:
             c1, c2 = st.columns(2)
             with c1: start_f = st.date_input("From", first_day)
             with c2: end_f = st.date_input("To", last_day)
-            
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
