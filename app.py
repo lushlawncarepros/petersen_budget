@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Refined Mobile List with Grid Overlay and Perfect Vertical Centering
+# CSS: Refined Mobile List with Perfected Vertical Centering
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -34,7 +34,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        padding: 0 12px; /* Horizontal padding only */
+        padding: 0 12px 8px 12px; /* Added 8px bottom padding to "pull" text up */
         height: 60px;
         width: 100%;
         position: absolute;
@@ -43,9 +43,6 @@ st.markdown("""
         z-index: 1;
         pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
-        
-        /* KEY FIX FOR CENTERING: Match line-height to box height */
-        line-height: 60px !important; 
         overflow: hidden;
     }
     
@@ -54,7 +51,6 @@ st.markdown("""
         font-size: 0.85rem; 
         color: #111; 
         font-weight: 700;
-        height: 60px;
         display: flex;
         align-items: center;
     }
@@ -66,7 +62,6 @@ st.markdown("""
         white-space: nowrap; 
         overflow: hidden; 
         text-overflow: ellipsis; 
-        height: 60px;
         display: flex;
         align-items: center;
     }
@@ -75,7 +70,6 @@ st.markdown("""
         font-size: 1.05rem; 
         font-weight: 800; 
         text-align: right; 
-        height: 60px;
         display: flex;
         align-items: center;
         justify-content: flex-end;
@@ -101,6 +95,10 @@ st.markdown("""
         margin: 0 !important;
         display: block !important;
         cursor: pointer;
+    }
+    
+    .row-container .stButton button:hover {
+        background-color: rgba(0,0,0,0.03) !important;
     }
     
     /* Ledger Header */
