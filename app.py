@@ -34,7 +34,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* Increased bottom padding to 20px to shift text significantly higher */
+        /* Bottom padding to shift text significantly higher */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -102,14 +102,14 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Ledger Header */
+    /* Ledger Header - Increased font size by 100% */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
         border-bottom: 2px solid #333;
         color: #444;
-        font-size: 0.75rem;
+        font-size: 1.5rem; /* Increased from 0.75rem */
         font-weight: 800;
         text-transform: uppercase;
         background-color: white;
@@ -299,7 +299,7 @@ with tab3:
             st.markdown(f"**Filtered Net:** `${f_net:,.2f}`")
 
         work_df = work_df.sort_values(by="Date", ascending=False)
-        st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
         st.markdown('<div style="background-color:white; width:100%;">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
