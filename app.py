@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Seamless Stacked Transactions
+# CSS: Seamlessly Stacked Transactions with Minimal Spacing
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -27,10 +27,11 @@ st.markdown("""
     /* THE ROW CONTAINER */
     .row-container {
         position: relative; 
-        height: 60px; 
-        margin-bottom: 0px; /* Removed 2px gap to stack perfectly */
+        height: 48px; /* Slimmer height for stacking */
+        margin-bottom: 2px; /* The 2px gap you requested */
         width: 100%;
-        background-color: transparent; 
+        background-color: var(--secondary-background-color); /* Slight tint to see the rows */
+        border-radius: 4px;
     }
     
     /* 1. VISUAL LAYER (Text) */
@@ -39,10 +40,8 @@ st.markdown("""
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
-        border-bottom: none; /* Removed the separating line */
-        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
-        padding: 0 12px 20px 12px; 
-        height: 60px;
+        padding: 0 12px; 
+        height: 48px;
         width: 100%;
         position: absolute;
         top: 0;
@@ -57,13 +56,13 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. THE CLICK LAYER (Seamless Button Overlay) */
+    /* 2. THE CLICK LAYER (Invisible Button Overlay) */
     .row-container .stButton {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
-        height: 60px;
+        height: 48px;
         z-index: 5;
     }
     
@@ -71,10 +70,10 @@ st.markdown("""
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
-        box-shadow: none !important; /* Ensure no shadows show */
-        outline: none !important; /* Ensure no focus outlines show */
+        box-shadow: none !important;
+        outline: none !important;
         width: 100% !important;
-        height: 60px !important;
+        height: 48px !important;
         padding: 0 !important;
         margin: 0 !important;
         display: block !important;
@@ -82,32 +81,27 @@ st.markdown("""
     }
     
     .row-container .stButton button:hover {
-        background-color: rgba(128,128,128,0.05) !important;
+        background-color: rgba(128,128,128,0.1) !important;
     }
     
     /* Ledger Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 10px;
+        padding: 10px 12px;
         border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
         font-size: 1.0rem; 
         font-weight: 800;
         text-transform: uppercase;
-        background-color: transparent;
+        margin-bottom: 4px;
     }
 
     /* --- FILTER UI SPACING --- */
     div[data-testid="stPopover"] { 
         width: 100%; 
-        margin-top: 25px !important; 
+        margin-top: 10px !important; 
     }
     
-    div[data-testid="stCheckbox"] { 
-        margin-bottom: 12px !important; 
-        padding-top: 5px !important;
-    }
-
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
