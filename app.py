@@ -224,7 +224,7 @@ def edit_dialog(row_index, row_data):
 def manage_cat_dialog(old_name, cat_type):
     st.write(f"Managing **{cat_type}**: {old_name}")
     
-    # New: Ability to change Type (Expense/Income)
+    # Ability to change Type (Expense/Income)
     new_type = st.selectbox("Designation", ["Expense", "Income"], index=0 if cat_type == "Expense" else 1)
     new_name = st.text_input("Category Name", value=old_name)
     
@@ -241,8 +241,6 @@ def manage_cat_dialog(old_name, cat_type):
                 conn.update(worksheet="categories", data=df_c)
                 
                 # 2. Sync all existing transactions
-                # Search by name. If name is changing, we find by old_name.
-                # Also update the Type column in transactions to match new_type.
                 mask_t = (df_t["Category"] == old_name)
                 df_t.loc[mask_t, "Category"] = new_name
                 df_t.loc[mask_t, "Type"] = new_type
@@ -384,15 +382,17 @@ with st.sidebar:
                 time.sleep(0.5)
                 st.rerun()
     
-    # --- MANAGE CATEGORY SECTION (Updated UI and Header) ---
+    # --- MANAGE CATEGORY SECTION (Matches Categories header style and box) ---
     st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
-    st.header("Manage Existing Category") # Matches Categories header style
+    st.header("Manage Existing Category")
     
-    manage_type = st.selectbox("View Type", ["Expense", "Income"], key="m_type")
-    manage_list = sorted(df_c[df_c["Type"] == manage_type]["Name"].unique().tolist())
-    target_cat = st.selectbox("Select Category", manage_list, key="m_list")
-    
-    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
-    if st.button("🔧 Manage Selected", use_container_width=True):
-        if target_cat:
-            manage_cat_dialog(target_cat, manage_type)
+    # Container with border provides the "little grey box" visual match
+    with st.container(border=True):
+        manage_type = st.selectbox("View Type", ["Expense", "Income"], key="m_type")
+        manage_list = sorted(df_c[df_c["Type"] == manage_type]["Name"].unique().tolist())
+        target_cat = st.selectbox("Select Category", manage_list, key="m_list")
+        
+        st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+        if st.button("🔧 Manage Selected", use_container_width=True):
+            if target_cat:
+                manage_cat_dialog(target_cat, manage_type)
