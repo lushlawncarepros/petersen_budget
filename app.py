@@ -9,80 +9,65 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Compact 30px Row Height with 0px Text Bottom Padding
+# CSS: Resetting to Default Spacing & Padding
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* 1. FORCE ZERO GAPS */
-    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    [data-testid="stVerticalBlock"] > div { margin: 0 !important; padding: 0 !important; }
-    [data-testid="element-container"] { margin: 0 !important; padding: 0 !important; }
-    
-    /* 2. TAB STYLING: Bold (1.35rem) */
+    /* --- TAB STYLING --- */
+    /* Kept the bold tabs you liked */
     button[data-baseweb="tab"] p {
         font-size: 1.35rem !important; 
         font-weight: 800 !important;
     }
     
-    /* 3. THE ROW CONTAINER (Strict 30px height) */
+    /* LEDGER ROW STYLING (Default Spacing) */
     .row-container {
-        position: relative; 
-        height: 30px; 
-        margin-bottom: 2px; /* The 2px gap requested */
+        position: relative;
         width: 100%;
-        background-color: var(--secondary-background-color); 
-        border-radius: 4px;
-        overflow: hidden;
+        margin-bottom: 0.5rem; /* Standard Streamlit-like spacing */
     }
     
-    /* VISUAL LAYER (Text) - 0px Bottom Padding */
+    /* VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
-        background-color: transparent;
-        /* Padding set to 0px top/bottom as requested */
-        padding: 0px 12px !important; 
-        height: 30px;
+        background-color: var(--secondary-background-color);
+        border-radius: 8px;
+        padding: 12px; /* Restored standard padding */
         width: 100%;
-        position: absolute;
-        top: 0;
-        left: 0;
-        z-index: 1;
-        pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
+        border: 1px solid rgba(128, 128, 128, 0.1);
     }
     
-    .tr-date { width: 18%; font-size: 0.8rem; font-weight: 700; opacity: 0.8; }
-    .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
+    .tr-date { width: 20%; font-size: 0.9rem; font-weight: 700; opacity: 0.8; }
+    .tr-cat { width: 50%; font-size: 1.0rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 1.1rem; font-weight: 800; text-align: right; }
     
-    /* 4. THE BUTTON OVERLAY (20px bottom padding maintained) */
+    /* CLICK LAYER (Invisible Button Overlay) */
+    /* Reset to cover the dynamic height of the row */
     .row-container .stButton {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
+        height: 100%;
         z-index: 5;
     }
     
     .row-container .stButton button {
-        padding-top: 0px !important;
-        padding-bottom: 20px !important; 
-        
-        height: auto !important;
-        min-height: 0px !important;
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
-        border-width: 0 !important;
-        border-style: none !important;
         box-shadow: none !important;
         outline: none !important;
-        
         width: 100% !important;
+        height: 100% !important;
+        min-height: 45px; /* Ensures a good touch target */
+        padding: 0 !important;
+        margin: 0 !important;
         display: block !important;
         cursor: pointer;
     }
@@ -95,18 +80,17 @@ st.markdown("""
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 6px 10px;
+        padding: 10px 12px;
         border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
         font-size: 0.9rem; 
         font-weight: 800;
         text-transform: uppercase;
-        margin-bottom: 4px;
-        margin-top: 5px;
+        margin-bottom: 12px;
     }
 
     /* General UI Tweaks */
-    div[data-testid="stPopover"] { width: 100%; margin-top: 10px !important; }
-    .stButton>button { border-radius: 8px; }
+    div[data-testid="stPopover"] { width: 100%; }
+    .stButton>button { border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -243,7 +227,8 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else: st.info("No data yet.")
+    else:
+        st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -278,6 +263,7 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
+        # History list with restored natural spacing
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
