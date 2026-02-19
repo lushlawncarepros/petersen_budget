@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from streamlit_gsheets import GSheetsConnection
 
@@ -20,12 +20,12 @@ st.markdown("""
     /* THE ROW CONTAINER */
     .row-container {
         position: relative; 
-        height: 60px; /* Standard height for all rows */
+        height: 60px; 
         margin-bottom: 2px;
         width: 100%;
     }
     
-    /* 1. THE VISUAL LAYER (Text) */
+    /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center;
@@ -38,42 +38,23 @@ st.markdown("""
         position: absolute;
         top: 0;
         left: 0;
-        z-index: 1; /* Sits below the button */
-        pointer-events: none; /* Clicks pass through to the button underneath */
+        z-index: 1;
+        pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
     }
     
-    /* Darkened Date Text for high visibility */
-    .tr-date { 
-        width: 20%; 
-        font-size: 0.85rem; 
-        color: #111; /* Very dark/black */
-        font-weight: 700; 
-    }
-    .tr-cat { 
-        width: 50%; 
-        font-size: 0.95rem; 
-        color: #222; 
-        font-weight: 600; 
-        white-space: nowrap; 
-        overflow: hidden; 
-        text-overflow: ellipsis; 
-    }
-    .tr-amt { 
-        width: 30%; 
-        font-size: 1.05rem; 
-        font-weight: 800; 
-        text-align: right; 
-    }
+    .tr-date { width: 20%; font-size: 0.85rem; color: #111; font-weight: 700; }
+    .tr-cat { width: 50%; font-size: 0.95rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. THE CLICK LAYER (Button Overlay) */
+    /* 2. CLICK LAYER (Button Overlay) */
     .row-container .stButton {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 60px;
-        z-index: 5; /* Sits on top of the text */
+        z-index: 5;
     }
     
     .row-container .stButton button {
@@ -92,7 +73,7 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Static Header */
+    /* Header Styling */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -104,7 +85,7 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    /* Style for non-history action buttons */
+    /* Style for non-history buttons */
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -131,11 +112,10 @@ if not st.session_state["authenticated"]:
             st.rerun()
     st.stop()
 
-# --- DATA ---
+# --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_float(val):
-    """Handles both raw numbers and currency strings from Google Sheets."""
     try:
         if isinstance(val, (int, float)): return float(val)
         if isinstance(val, str):
@@ -154,13 +134,11 @@ def load_data_clean():
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
-            
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
-            
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
@@ -185,6 +163,7 @@ def get_icon(cat_name, row_type):
     if "alesa" in n: return "👩"
     return "💸" if row_type == "Expense" else "💰"
 
+# --- EDITOR DIALOG ---
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
@@ -214,6 +193,7 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
+# --- APP TABS ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
@@ -258,9 +238,34 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        work_df = df_t.copy()
-        work_df['sort_date'] = pd.to_datetime(work_df['Date'])
-        work_df = work_df.sort_values(by="sort_date", ascending=False)
+        # --- FILTER ENGINE ---
+        with st.expander("🔍 Filter History"):
+            f_cols = st.columns(2)
+            # Default to last 30 days
+            with f_cols[0]:
+                start_date = st.date_input("From", datetime.now() - timedelta(days=30))
+            with f_cols[1]:
+                end_date = st.date_input("To", datetime.now())
+            
+            all_cats = sorted(df_t["Category"].unique().tolist())
+            sel_cats = st.multiselect("Categories", all_cats, default=all_cats)
+            
+            # Apply Filters
+            work_df = df_t.copy()
+            work_df = work_df[
+                (work_df["Date"].dt.date >= start_date) & 
+                (work_df["Date"].dt.date <= end_date) & 
+                (work_df["Category"].isin(sel_cats))
+            ]
+            
+            # Show small summary of filtered data
+            f_inc = work_df[work_df["Type"] == "Income"]["Amount"].sum()
+            f_exp = work_df[work_df["Type"] == "Expense"]["Amount"].sum()
+            st.markdown(f"**Filtered Net:** `${(f_inc - f_exp):,.2f}`")
+
+        # Sort for display
+        work_df = work_df.sort_values(by="Date", ascending=False)
+        
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
@@ -272,10 +277,7 @@ with tab3:
             prefix = "-" if is_ex else "+"
             amt_display = f"{prefix}${row['Amount']:,.0f}"
             
-            # --- THE ABSOLUTE OVERLAY ---
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
-            
-            # Visual Layer
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
@@ -283,15 +285,13 @@ with tab3:
                     <div class="tr-amt" style="color:{price_color};">{amt_display}</div>
                 </div>
             """, unsafe_allow_html=True)
-            
-            # Click Layer - Forced full-width with use_container_width
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
-                
             st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("History is empty.")
 
+# --- SIDEBAR ---
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
     if st.button("🔄 Force Sync"):
