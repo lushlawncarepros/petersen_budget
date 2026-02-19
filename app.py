@@ -9,13 +9,13 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Vertical Alignment Fix
+# CSS: High-Contrast Layout with Exact Provided Measurements
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove vertical gaps between block elements */
+    /* 3. LAYOUT SPACING - Streamlit Internal Block Gap: 0rem */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* --- TAB STYLING --- */
@@ -24,30 +24,28 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* THE ROW CONTAINER */
+    /* 3. LAYOUT SPACING - Row Container Height: 45px & Gap Between Rows: 8px */
     .row-container {
         position: relative; 
         height: 45px; 
-        margin-bottom: 8px;
+        margin-bottom: 8px; /* Gap between rows */
         width: 100%;
         background-color: transparent; 
     }
     
-    /* 1. VISUAL LAYER (Text) */
+    /* 1. VISUAL TEXT ROW (.trans-row) */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: var(--secondary-background-color);
         border-radius: 8px;
-        /* THE ALIGNMENT FIX: 
-           We use a small top padding and 0 bottom padding to 
-           line the font up with the invisible button's center. */
+        /* Padding: Top 4px, Right 12px, Bottom 0px, Left 12px */
         padding: 4px 12px 0px 12px !important; 
-        height: 45px;
+        height: 40px; /* Total Height: 40px */
         width: 100%;
         position: absolute;
-        top: 0;
+        top: 2.5px; /* Centered vertically within the 45px container (45-40)/2 */
         left: 0;
         z-index: 1;
         pointer-events: none;
@@ -60,7 +58,7 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. THE CLICK LAYER (Seamless Button Overlay) */
+    /* 2. INVISIBLE CLICK BUTTON (.stButton button) */
     .row-container div[data-testid="element-container"] {
         position: absolute !important;
         top: 0 !important;
@@ -79,9 +77,9 @@ st.markdown("""
         box-shadow: none !important;
         outline: none !important;
         width: 100% !important;
-        height: 45px !important;
-        padding: 0 !important;
-        margin: 0 !important;
+        height: 45px !important; /* Total Height: 45px */
+        padding: 0px !important; /* Padding (All sides): 0px */
+        margin: 0px !important;  /* Margin (All sides): 0px */
         display: block !important;
         cursor: pointer;
     }
@@ -90,7 +88,7 @@ st.markdown("""
         background-color: rgba(128,128,128,0.05) !important;
     }
     
-    /* Ledger Header */
+    /* Ledger Header Labels */
     .hist-header {
         display: flex;
         justify-content: space-between;
