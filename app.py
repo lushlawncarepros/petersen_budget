@@ -160,13 +160,16 @@ def load_data_clean():
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"])
         
-        # Categories Clean
+        # Categories Clean (Now initializes 'Order')
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
-            for col in ["Type", "Name"]:
-                if col not in c_df.columns: c_df[col] = ""
+            for col in ["Type", "Name", "Order"]:
+                if col not in c_df.columns: 
+                    if col == "Order": c_df[col] = 10
+                    else: c_df[col] = ""
+            c_df["Order"] = pd.to_numeric(c_df["Order"], errors='coerce').fillna(10)
         else:
-            c_df = pd.DataFrame(columns=["Type", "Name"])
+            c_df = pd.DataFrame(columns=["Type", "Name", "Order"])
             
         # Budgets Clean
         try:
@@ -181,7 +184,7 @@ def load_data_clean():
         except: b_df = pd.DataFrame(columns=["Month", "Category", "Amount"])
             
         return t_df, c_df, b_df
-    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name"]), pd.DataFrame(columns=["Month", "Category", "Amount"])
+    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name", "Order"]), pd.DataFrame(columns=["Month", "Category", "Amount"])
 
 df_t, df_c, df_b = load_data_clean()
 
@@ -200,7 +203,10 @@ def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}** &nbsp; | &nbsp; Entry Created by: **{row_data.get('User', 'Unknown')}**")
     
     e_date = st.date_input("Date", row_data["Date"])
-    cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
+    # Sort dropdown by Order
+    cat_df_sorted = df_c[df_c["Type"] == row_data["Type"]].sort_values(by=["Order", "Name"])
+    cat_list = cat_df_sorted["Name"].tolist()
+    
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     
@@ -243,20 +249,17 @@ def manage_cat_dialog(old_name, cat_type):
     with c1:
         if st.button("💾 Save Changes", use_container_width=True):
             if new_name and (new_name != old_name or new_type != cat_type):
-                # 1. Update Category List
                 mask_c = (df_c["Type"] == cat_type) & (df_c["Name"] == old_name)
                 df_c.loc[mask_c, "Name"] = new_name
                 df_c.loc[mask_c, "Type"] = new_type
                 conn.update(worksheet="categories", data=df_c)
                 
-                # 2. Sync existing transactions
                 mask_t = (df_t["Category"] == old_name)
                 df_t.loc[mask_t, "Category"] = new_name
                 df_t.loc[mask_t, "Type"] = new_type
                 df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
                 conn.update(worksheet="transactions", data=df_t)
                 
-                # 3. Sync existing budget planners
                 if not df_b.empty:
                     mask_b = (df_b["Category"] == old_name)
                     if mask_b.any():
@@ -291,7 +294,11 @@ with tab1:
     t_type = st.radio("Type", ["Expense", "Income"], horizontal=True)
     with st.form("entry_form", clear_on_submit=True):
         f_date = st.date_input("Date", datetime.now())
-        f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
+        
+        # Sort Categories by Order
+        cat_df_sorted = df_c[df_c["Type"] == t_type].sort_values(by=["Order", "Name"])
+        f_cats = cat_df_sorted["Name"].tolist()
+        
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
         f_memo = st.text_input("Memo", placeholder="Optional details")
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
@@ -313,11 +320,10 @@ with tab1:
             elif f_amt is None: st.error("Please enter an amount.")
             else: st.error("Please add a category first!")
 
-# --- BUDGET TAB (Profit & Loss Style) ---
+# --- BUDGET TAB (Profit & Loss Style with Manual Sorting) ---
 with tab_budget:
     st.subheader("Monthly Budget Planner")
     
-    # Month/Year Selector
     now = datetime.now()
     years = list(range(2023, 2035))
     months = list(calendar.month_name)[1:]
@@ -329,29 +335,31 @@ with tab_budget:
     month_num = months.index(selected_month) + 1
     month_str = f"{selected_year}-{month_num:02d}"
     
-    # Calculate Actuals for the selected month
     t_month = df_t[(df_t['Date'].dt.year == selected_year) & (df_t['Date'].dt.month == month_num)]
     actuals = t_month.groupby('Category')['Amount'].sum().to_dict()
     
-    # Load Planned for the selected month
     b_month = df_b[df_b['Month'] == month_str] if not df_b.empty else pd.DataFrame(columns=["Month", "Category", "Amount"])
     planned = b_month.set_index('Category')['Amount'].to_dict() if not b_month.empty else {}
     
-    # Function to build DataFrame for data_editor
     def build_budget_df(cat_type):
-        cats = sorted(df_c[df_c["Type"] == cat_type]["Name"].unique().tolist(), key=str.lower)
+        cat_subset = df_c[df_c["Type"] == cat_type]
         data = []
-        for c in cats:
+        for _, r in cat_subset.iterrows():
+            c = r["Name"]
+            o = r["Order"]
             p = float(planned.get(c, 0.0))
             a = float(actuals.get(c, 0.0))
             diff = float(a - p) if cat_type == "Income" else float(p - a)
-            data.append({"Category": c, "Planned": p, "Actual": a, "Diff": diff})
-        return pd.DataFrame(data)
+            data.append({"Order": o, "Category": c, "Planned": p, "Actual": a, "Diff": diff})
+        
+        res_df = pd.DataFrame(data)
+        if not res_df.empty:
+            res_df = res_df.sort_values(by=["Order", "Category"])
+        return res_df
 
     inc_b_df = build_budget_df("Income")
     exp_b_df = build_budget_df("Expense")
     
-    # Calculate Totals
     tot_inc_p = inc_b_df["Planned"].sum() if not inc_b_df.empty else 0
     tot_inc_a = inc_b_df["Actual"].sum() if not inc_b_df.empty else 0
     tot_exp_p = exp_b_df["Planned"].sum() if not exp_b_df.empty else 0
@@ -363,8 +371,9 @@ with tab_budget:
     nc2.metric("Actual Net", f"${tot_inc_a - tot_exp_a:,.0f}")
     nc3.metric("Variance", f"${(tot_inc_a - tot_exp_a) - (tot_inc_p - tot_exp_p):,.0f}")
     
-    # Data Editors (Profit & Loss layout)
+    # New Config includes editable "Order"
     col_config = {
+        "Order": st.column_config.NumberColumn("Sort", step=1, help="Lower numbers appear first"),
         "Category": st.column_config.TextColumn("Category", disabled=True),
         "Planned": st.column_config.NumberColumn("Planned ($)", format="%.2f", step=1),
         "Actual": st.column_config.NumberColumn("Actual ($)", format="%.2f", disabled=True),
@@ -382,10 +391,17 @@ with tab_budget:
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     if st.button("💾 Save Budget Planner", use_container_width=True):
         new_b = []
+        updated_c = df_c.copy() # Track sorting changes
+        
         if not ed_inc.empty:
-            for _, r in ed_inc.iterrows(): new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
+            for _, r in ed_inc.iterrows(): 
+                new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
+                updated_c.loc[updated_c["Name"] == r["Category"], "Order"] = r["Order"]
         if not ed_exp.empty:
-            for _, r in ed_exp.iterrows(): new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
+            for _, r in ed_exp.iterrows(): 
+                new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
+                updated_c.loc[updated_c["Name"] == r["Category"], "Order"] = r["Order"]
+                
         new_b_df = pd.DataFrame(new_b)
         
         if df_b.empty:
@@ -395,7 +411,9 @@ with tab_budget:
             updated_b = pd.concat([latest_b, new_b_df], ignore_index=True)
             
         conn.update(worksheet="budgets", data=updated_b)
-        st.success(f"Budget saved for {selected_month} {selected_year}!")
+        conn.update(worksheet="categories", data=updated_c) # Push sort orders
+        
+        st.success(f"Budget and Category Orders saved for {selected_month} {selected_year}!")
         time.sleep(1)
         st.rerun()
 
@@ -406,22 +424,17 @@ with tab2:
         inc_val = viz_df[viz_df["Type"] == "Income"]["Amount"].sum()
         exp_val = viz_df[viz_df["Type"] == "Expense"]["Amount"].sum()
         st.metric("All-Time Net Balance", f"${(inc_val - exp_val):,.2f}", delta=f"${inc_val:,.2f} In")
-        
-        # Added a safety block in case of bad Chart Data
-        try:
-            c1, c2 = st.columns(2)
-            with c1:
-                dx = viz_df[viz_df["Type"] == "Expense"]
-                if not dx.empty:
-                    fig_ex = px.sunburst(dx, path=['Category', 'Memo'], values='Amount', title="Expenses Breakdown")
-                    st.plotly_chart(fig_ex, use_container_width=True)
-            with c2:
-                di = viz_df[viz_df["Type"] == "Income"]
-                if not di.empty:
-                    fig_in = px.sunburst(di, path=['Category', 'Memo'], values='Amount', title="Income Breakdown")
-                    st.plotly_chart(fig_in, use_container_width=True)
-        except Exception as e:
-            st.error("Chart rendering error. Ensure there are no negative values.")
+        c1, c2 = st.columns(2)
+        with c1:
+            dx = viz_df[viz_df["Type"] == "Expense"]
+            if not dx.empty:
+                fig_ex = px.sunburst(dx, path=['Category', 'Memo'], values='Amount', title="Expenses Breakdown")
+                st.plotly_chart(fig_ex, use_container_width=True)
+        with c2:
+            di = viz_df[viz_df["Type"] == "Income"]
+            if not di.empty:
+                fig_in = px.sunburst(di, path=['Category', 'Memo'], values='Amount', title="Income Breakdown")
+                st.plotly_chart(fig_in, use_container_width=True)
     else: st.info("No data yet.")
 
 with tab3:
@@ -436,13 +449,16 @@ with tab3:
             with c2: end_f = st.date_input("To", last_day)
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
-                inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
-                sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
+                # Sort filter options
+                inc_df = df_c[df_c["Type"] == "Income"].sort_values(by=["Order", "Name"])
+                sel_inc = [cat for cat in inc_df["Name"] if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
+                
                 st.divider()
                 st.markdown("**Expense Categories**")
-                exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
-                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
+                exp_df = df_c[df_c["Type"] == "Expense"].sort_values(by=["Order", "Name"])
+                sel_exp = [cat for cat in exp_df["Name"] if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
                 all_selected = sel_inc + sel_exp
+                
             work_df = df_t.copy()
             work_df = work_df[(work_df["Date"].dt.date >= start_f) & (work_df["Date"].dt.date <= end_f) & (work_df["Category"].isin(all_selected))]
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
@@ -489,7 +505,9 @@ with st.sidebar:
             if cn:
                 st.cache_resource.clear()
                 _, latest_c, _ = load_data_clean()
-                updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
+                # Order defaults to 10 for new entries
+                new_cat = pd.DataFrame([{"Type": ct, "Name": cn, "Order": 10}])
+                updated_c = pd.concat([latest_c, new_cat], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c)
                 st.success("Added!")
                 time.sleep(0.5)
@@ -499,7 +517,9 @@ with st.sidebar:
     st.header("Manage Existing Category")
     with st.container(border=True):
         manage_type = st.selectbox("View Type", ["Expense", "Income"], key="m_type")
-        manage_list = sorted(df_c[df_c["Type"] == manage_type]["Name"].unique().tolist())
+        m_df_sorted = df_c[df_c["Type"] == manage_type].sort_values(by=["Order", "Name"])
+        manage_list = m_df_sorted["Name"].tolist()
+        
         target_cat = st.selectbox("Select Category", manage_list, key="m_list")
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
         if st.button("🔧 Manage Category", use_container_width=True):
