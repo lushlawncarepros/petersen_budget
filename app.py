@@ -12,9 +12,6 @@ st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="cente
 # CSS: High-Contrast Layout with Exact Measurements
 st.markdown("""
     <style>
-    /* Hide Sidebar Nav */
-    div[data-testid="stSidebarNav"] { display: none; }
-    
     /* LAYOUT SPACING - Streamlit Internal Block Gap: 0rem */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
@@ -448,29 +445,51 @@ with tab_budget:
 
 with tab2:
     if not df_t.empty:
-        viz_df = df_t.copy()
-        
-        # Merge the new 'Group' mapping into the transactions for visualization
-        cat_to_group = dict(zip(df_c["Name"], df_c["Group"]))
-        viz_df["Group"] = viz_df["Category"].map(lambda x: cat_to_group.get(x, "General"))
-        viz_df["Memo"] = viz_df["Memo"].apply(lambda x: "Unspecified" if str(x).lower() == "nan" or str(x).strip() == "" else str(x))
-        
-        inc_val = viz_df[viz_df["Type"] == "Income"]["Amount"].sum()
-        exp_val = viz_df[viz_df["Type"] == "Expense"]["Amount"].sum()
+        # Calculate overall net balance from raw data to keep math accurate
+        inc_val = df_t[df_t["Type"] == "Income"]["Amount"].sum()
+        exp_val = df_t[df_t["Type"] == "Expense"]["Amount"].sum()
         st.metric("All-Time Net Balance", f"${(inc_val - exp_val):,.2f}", delta=f"${inc_val:,.2f} In")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            dx = viz_df[viz_df["Type"] == "Expense"]
-            if not dx.empty:
-                # 3-Level Deep Sunburst! (Group -> Category -> Memo)
-                fig_ex = px.sunburst(dx, path=['Group', 'Category', 'Memo'], values='Amount', title="Expenses Breakdown")
-                st.plotly_chart(fig_ex, use_container_width=True)
-        with c2:
-            di = viz_df[viz_df["Type"] == "Income"]
-            if not di.empty:
-                fig_in = px.sunburst(di, path=['Group', 'Category', 'Memo'], values='Amount', title="Income Breakdown")
-                st.plotly_chart(fig_in, use_container_width=True)
+        # Filter out 0 or negative amounts to prevent Plotly math crashes
+        viz_df = df_t[df_t["Amount"] > 0].copy()
+        
+        if not viz_df.empty:
+            # Merge the new 'Group' mapping into the transactions for visualization
+            cat_to_group = dict(zip(df_c["Name"], df_c["Group"]))
+            
+            def safe_label(x, default):
+                v = str(x).strip()
+                return default if v.lower() == 'nan' or v == '' else v
+                
+            viz_df["Group"] = viz_df["Category"].apply(lambda x: safe_label(cat_to_group.get(x, "General"), "General"))
+            viz_df["Category"] = viz_df["Category"].apply(lambda x: safe_label(x, "Unknown"))
+            viz_df["Memo"] = viz_df["Memo"].apply(lambda x: safe_label(x, "Unspecified"))
+            
+            # Prevent Hierarchy Error: Plotly crashes if Parent Node == Child Node name
+            # Appending zero-width spaces (\u200b) makes them unique under the hood
+            viz_df["Category"] = viz_df["Category"] + "\u200b"
+            viz_df["Memo"] = viz_df["Memo"] + "\u200b\u200b"
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                dx = viz_df[viz_df["Type"] == "Expense"]
+                if not dx.empty:
+                    try:
+                        # 3-Level Deep Sunburst! (Group -> Category -> Memo)
+                        fig_ex = px.sunburst(dx, path=['Group', 'Category', 'Memo'], values='Amount', title="Expenses Breakdown")
+                        st.plotly_chart(fig_ex, use_container_width=True)
+                    except Exception:
+                        st.error("Could not render Expenses chart.")
+            with c2:
+                di = viz_df[viz_df["Type"] == "Income"]
+                if not di.empty:
+                    try:
+                        fig_in = px.sunburst(di, path=['Group', 'Category', 'Memo'], values='Amount', title="Income Breakdown")
+                        st.plotly_chart(fig_in, use_container_width=True)
+                    except Exception:
+                        st.error("Could not render Income chart.")
+        else:
+            st.info("No positive transactions available to chart.")
     else: st.info("No data yet.")
 
 with tab3:
