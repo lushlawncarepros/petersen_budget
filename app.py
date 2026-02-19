@@ -77,7 +77,7 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Ledger Header */
+    /* Ledger Header - Refined Size */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -258,13 +258,15 @@ with tab3:
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
-                sel_inc = [cat for cat in inc_list if st.checkbox(f"🟢 {cat}", value=True, key=f"f_inc_{cat}")]
+                # Using ❎ emoji for income identification as requested
+                sel_inc = [cat for cat in inc_list if st.checkbox(f"❎ {cat}", value=True, key=f"f_inc_{cat}")]
                 
                 st.divider()
                 
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
-                sel_exp = [cat for cat in exp_list if st.checkbox(f"🔴 {cat}", value=True, key=f"f_exp_{cat}")]
+                # Standard labeling for expenses, relying on default checkmark
+                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
                 
                 all_selected = sel_inc + sel_exp
 
