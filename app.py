@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Vertical Alignment Fixes
+# CSS: High-Contrast Layout with Precise Checkbox Styling
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -34,7 +34,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* 20px bottom padding to shift text up for perfect vertical balance */
+        /* 20px bottom padding shifts text up for perfect vertical balance */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -77,7 +77,7 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Ledger Header - Refined Size */
+    /* Ledger Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -90,7 +90,7 @@ st.markdown("""
         background-color: white;
     }
 
-    /* --- FILTER UI SPACING --- */
+    /* --- FILTER UI SPACING & COLORS --- */
     
     div[data-testid="stPopover"] { 
         width: 100%; 
@@ -100,6 +100,21 @@ st.markdown("""
     div[data-testid="stCheckbox"] { 
         margin-bottom: 12px !important; 
         padding-top: 5px !important;
+    }
+    
+    /* TARGETING ONLY THE CHECKBOX SQUARE (+ div instead of ~ div) */
+    
+    /* 1. Default (Expenses) = Red */
+    [data-testid="stCheckbox"] input:checked + div {
+        background-color: #d32f2f !important;
+        border-color: #d32f2f !important;
+    }
+
+    /* 2. Income Checkboxes = Green */
+    /* We use the key prefix 'f_inc_' to target these specifically in the DOM */
+    div[data-testid="stCheckbox"]:has(input[aria-label*="❎"]) input:checked + div {
+        background-color: #2e7d32 !important;
+        border-color: #2e7d32 !important;
     }
 
     .stButton>button { border-radius: 12px; }
@@ -258,14 +273,14 @@ with tab3:
             with st.popover("Select Categories"):
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
-                # Using ❎ emoji for income identification as requested
+                # Using ❎ emoji for income identification
                 sel_inc = [cat for cat in inc_list if st.checkbox(f"❎ {cat}", value=True, key=f"f_inc_{cat}")]
                 
                 st.divider()
                 
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
-                # Standard labeling for expenses, relying on default checkmark
+                # Standard labeling for expenses
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
                 
                 all_selected = sel_inc + sel_exp
