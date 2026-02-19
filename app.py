@@ -8,13 +8,13 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Refined Mobile List
+# CSS: Perfectly Aligned Mobile Ledger
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove default spacing */
+    /* Remove default spacing between rows */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* 1. VISUAL CARD STYLING */
@@ -23,22 +23,24 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         background-color: white;
-        border-bottom: 1px solid #e0e0e0; /* Slightly darker border */
-        padding: 12px 5px;
-        height: 55px;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 0 8px;
+        height: 55px; /* Fixed height for alignment */
         font-family: "Source Sans Pro", sans-serif;
+        position: relative;
+        z-index: 1;
     }
     
-    /* Column Spacing & Visibility */
+    /* Column Visibility & Alignment */
     .tr-date { 
         width: 18%; 
-        font-size: 0.75rem; 
-        color: #444; /* Darker Date Text for readability */
-        font-weight: 600; 
+        font-size: 0.8rem; 
+        color: #111; /* Very dark for high visibility */
+        font-weight: 700; 
     }
     .tr-cat { 
         width: 52%; 
-        font-size: 0.9rem; 
+        font-size: 0.95rem; 
         color: #222; 
         font-weight: 600; 
         white-space: nowrap; 
@@ -48,19 +50,29 @@ st.markdown("""
     }
     .tr-amt { 
         width: 30%; 
-        font-size: 0.95rem; 
+        font-size: 1rem; 
         font-weight: 800; 
         text-align: right; 
     }
     
     /* 2. INVISIBLE BUTTON OVERLAY */
+    /* We target the button container and the button itself to overlap the text exactly */
+    .row-overlay {
+        margin-top: -55px; /* Pull the button container up to the exact height of the row */
+        height: 55px;
+        position: relative;
+        z-index: 5;
+    }
+    
     .row-overlay button {
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
-        height: 55px; 
-        margin-top: -55px; /* Pulls button UP to cover the row */
-        z-index: 5;
+        width: 100% !important;
+        height: 55px !important;
+        display: block;
+        padding: 0 !important;
+        margin: 0 !important;
         cursor: pointer;
     }
     
@@ -68,20 +80,21 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Global Button Polish */
-    .stButton>button { border-radius: 10px; }
-    
-    /* Header */
+    /* Header Styling */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 5px;
+        padding: 8px;
         border-bottom: 2px solid #333;
         margin-bottom: 0px;
-        color: #555;
-        font-size: 0.7rem;
-        font-weight: bold;
+        color: #444;
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
     }
+
+    /* Polish for non-history buttons */
+    .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -111,7 +124,7 @@ if not st.session_state["authenticated"]:
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_float(val):
-    """Safely cleans currency strings or numbers."""
+    """Safely handles mixed numeric and string amounts."""
     try:
         if isinstance(val, (int, float)):
             return float(val)
@@ -125,28 +138,21 @@ def safe_float(val):
 def load_data_robust():
     st.cache_data.clear()
     try:
-        # Read standard
         t_df = conn.read(worksheet="transactions", ttl=0)
         c_df = conn.read(worksheet="categories", ttl=0)
         
-        # --- CLEAN TRANSACTIONS ---
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
-            
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # Safe conversion
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
-            
-            # Date Handling
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
         else:
             t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
 
-        # --- CLEAN CATEGORIES ---
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
@@ -206,7 +212,7 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
-# --- APP ---
+# --- MAIN APP ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
@@ -254,14 +260,16 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
+        # Sort data
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
         
+        # Static Header
         st.markdown("""
         <div class="hist-header">
-            <div style="width:18%">DATE</div>
-            <div style="width:52%">CATEGORY</div>
+            <div style="width:20%">DATE</div>
+            <div style="width:50%">CATEGORY</div>
             <div style="width:30%; text-align:right">PRICE</div>
         </div>
         """, unsafe_allow_html=True)
@@ -274,28 +282,23 @@ with tab3:
             amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             
-            # Colors
-            if is_ex:
-                prefix = "-"
-                amt_color = "#d32f2f" # Red
-            else:
-                prefix = "+"
-                amt_color = "#2e7d32" # Green
-                
+            # Styling colors
+            price_color = "#d32f2f" if is_ex else "#2e7d32" 
+            prefix = "-" if is_ex else "+"
             amt_display = f"{prefix}${amt_val:,.0f}"
             
-            # 1. VISUAL CARD (White Background)
+            # 1. VISUAL CARD (HTML)
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{amt_color};">{amt_display}</div>
+                    <div class="tr-amt" style="color:{price_color};">{amt_display}</div>
                 </div>
             """, unsafe_allow_html=True)
             
-            # 2. CLICK OVERLAY (Full Width Button)
+            # 2. OVERLAY CLICK TARGET (Full Width Button)
             st.markdown('<div class="row-overlay">', unsafe_allow_html=True)
-            # KEY FIX: use_container_width=True makes the button match the div width
+            # We use an empty string label " " which allows alignment
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -328,5 +331,4 @@ with st.sidebar:
                 st.success("Added!")
                 time.sleep(0.5)
                 st.rerun()
-
 
