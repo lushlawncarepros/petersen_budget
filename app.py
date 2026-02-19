@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Invisible Overlay Buttons
+# CSS: High-Contrast Layout with Exact Measurements
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -58,7 +58,7 @@ st.markdown("""
         top: 0; 
         left: 0;
         z-index: 1;
-        pointer-events: none; /* Allows clicks to pass through to the button beneath */
+        pointer-events: none; 
         font-family: "Source Sans Pro", sans-serif;
         border: 1px solid rgba(128, 128, 128, 0.1);
         box-sizing: border-box;
@@ -94,7 +94,6 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Hover feedback for the invisible row */
     .row-container .stButton button:hover {
         background-color: rgba(128,128,128,0.05) !important;
     }
@@ -229,7 +228,13 @@ with tab1:
         f_date = st.date_input("Date", datetime.now())
         f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
+        
+        # value=None allows typing to start in the "ones" place immediately
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
+        
+        # 30px Buffer added here to match the manage entry popup
+        st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+        
         if st.form_submit_button("Save"):
             if f_cats and f_amt is not None:
                 latest_t, _ = load_data_clean()
