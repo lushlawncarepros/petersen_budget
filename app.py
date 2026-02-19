@@ -24,11 +24,11 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. LAYOUT SPACING - Row Container Height: 45px & Gap Between Rows: 8px */
+    /* 3. LAYOUT SPACING - Row Container Height: 45px & Gap Between Rows: 0px */
     .row-container {
         position: relative; 
         height: 45px; 
-        margin-bottom: 8px; /* Gap between rows (margin-bottom) */
+        margin-bottom: 0px; /* Changed from 8px to 0px as requested */
         width: 100%;
         background-color: transparent; 
     }
