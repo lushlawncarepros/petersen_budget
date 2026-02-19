@@ -1,4 +1,3 @@
-# (Full code updated with theme-aware CSS)
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -10,29 +9,37 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Surgical Theme Overrides
-# 1. We force the "Primary Color" variable to Green (replaces all red accents)
-# 2. We keep rows transparent so they follow the Dark/Light theme automatically
+# CSS: Theme-Aware Layout with Green Accents
+# This CSS targets the primary color variables directly to turn accents Green 
+# while allowing the "System" theme toggle to remain functional.
 st.markdown("""
     <style>
-    /* GLOBAL THEME FIX: Change all "Red" accents to "Green" without breaking themes */
+    /* 1. GLOBAL PRIMARY COLOR (Turn Red to Green) */
     :root {
-        --primary-color: #2e7d32 !important;
+        --primary-color: #2e7d32;
     }
     
-    /* Hide Sidebar Nav */
-    div[data-testid="stSidebarNav"] { display: none; }
-    
-    /* Remove vertical gaps */
-    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    
-    /* --- TAB STYLING --- */
+    /* Target Streamlit's internal primary color variables */
+    [data-testid="stAppViewContainer"] {
+        --primary-color: #2e7d32;
+    }
+
+    /* 2. TAB STYLING: Bold, Large, and Green Accents */
     button[data-baseweb="tab"] p {
-        font-size: 1.35rem !important; 
+        font-size: 1.5rem !important; 
         font-weight: 800 !important;
+        transition: color 0.3s ease;
     }
     
-    /* THE ROW CONTAINER */
+    /* Selected Tab Text and Underline */
+    button[aria-selected="true"] p {
+        color: #2e7d32 !important;
+    }
+    div[data-baseweb="tab-highlight"] {
+        background-color: #2e7d32 !important;
+    }
+    
+    /* 3. TRANSACTION ROW STYLING (Transparent for Dark Mode support) */
     .row-container {
         position: relative; 
         height: 60px; 
@@ -41,13 +48,13 @@ st.markdown("""
         background-color: transparent; 
     }
     
-    /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
         border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -60,11 +67,11 @@ st.markdown("""
         overflow: hidden;
     }
     
-    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; }
+    .tr-date { width: 20%; font-size: 0.85rem; font-weight: 700; opacity: 0.8; }
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. THE CLICK LAYER */
+    /* 4. CLICK LAYER (Transparent Button) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -87,10 +94,10 @@ st.markdown("""
     }
     
     .row-container .stButton button:hover {
-        background-color: rgba(128,128,128,0.08) !important;
+        background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* Ledger Header - Balanced Size */
+    /* 5. LEDGER HEADERS: Small and Bold */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -102,10 +109,11 @@ st.markdown("""
         background-color: transparent;
     }
 
-    /* --- FILTER UI SPACING --- */
+    /* 6. GENERAL UI CLEANUP */
+    div[data-testid="stSidebarNav"] { display: none; }
+    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     div[data-testid="stPopover"] { width: 100%; margin-top: 25px !important; }
     div[data-testid="stCheckbox"] { margin-bottom: 12px !important; padding-top: 5px !important; }
-
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
