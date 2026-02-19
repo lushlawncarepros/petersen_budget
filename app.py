@@ -150,7 +150,7 @@ def load_data_clean():
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
-            t_df["Amount"] = t_df["Amount"].at.apply(safe_float)
+            t_df["Amount"] = t_df["Amount"].apply(safe_float)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
