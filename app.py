@@ -8,11 +8,14 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Custom HTML List with Invisible Click Overlay
+# CSS: Clean White Rows + Invisible Click Overlay
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
+    
+    /* Remove default spacing */
+    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* 1. VISUAL CARD STYLING */
     .trans-row {
@@ -20,46 +23,44 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         background-color: white;
-        border-bottom: 1px solid #f0f2f6;
-        padding: 12px 5px; /* Vertical padding breathes, horizontal keeps it aligned */
-        height: 55px;
+        border-bottom: 1px solid #eee;
+        padding: 8px 5px; /* Tighter padding */
+        height: 45px;
         font-family: "Source Sans Pro", sans-serif;
     }
     
     /* Column Spacing */
-    .tr-date { width: 15%; font-size: 0.75rem; color: #999; font-weight: 500; }
-    .tr-cat  { width: 55%; font-size: 0.9rem; color: #333; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; }
-    .tr-amt  { width: 30%; font-size: 0.95rem; font-weight: 700; text-align: right; }
+    .tr-date { width: 18%; font-size: 0.75rem; color: #999; font-weight: 500; }
+    .tr-cat  { width: 52%; font-size: 0.9rem; color: #333; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 5px; }
+    .tr-amt  { width: 30%; font-size: 0.9rem; font-weight: 700; text-align: right; }
     
     /* 2. INVISIBLE BUTTON OVERLAY */
-    /* This button sits exactly on top of the visual card but is invisible */
     .row-overlay button {
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
         width: 100%;
-        height: 55px; /* Must match .trans-row height */
-        margin-top: -55px; /* Pulls it up to cover the row */
+        height: 45px; /* Match row height */
+        margin-top: -45px; /* Pull up to cover row */
         z-index: 2;
         cursor: pointer;
     }
     
     .row-overlay button:hover {
-        background-color: rgba(0,0,0,0.02) !important; /* Slight hover effect */
-        color: transparent !important;
+        background-color: rgba(0,0,0,0.02) !important;
     }
     
     /* Global Button Polish */
-    .stButton>button { border-radius: 10px; }
+    .stButton>button { border-radius: 8px; }
     
     /* Header */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 0 5px 5px 5px;
-        border-bottom: 2px solid #eee;
-        margin-bottom: 5px;
-        color: #888;
+        padding: 5px;
+        border-bottom: 2px solid #333;
+        margin-bottom: 0px;
+        color: #555;
         font-size: 0.7rem;
         font-weight: bold;
     }
@@ -91,23 +92,28 @@ if not st.session_state["authenticated"]:
 # --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+def clean_currency(val):
+    """Safely cleans currency strings or numbers."""
+    if isinstance(val, str):
+        return val.replace('$', '').replace(',', '').strip()
+    return val
+
 def load_data_safe():
     st.cache_data.clear()
     try:
-        # Read with default types, then clean manually
-        t_df = conn.read(worksheet="transactions", ttl=0)
-        c_df = conn.read(worksheet="categories", ttl=0)
+        t_df = conn.read(worksheet="transactions", ttl=0, dtype=str)
+        c_df = conn.read(worksheet="categories", ttl=0, dtype=str)
         
         # --- CLEAN TRANSACTIONS ---
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             
-            # Ensure columns exist
+            # Ensure columns
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # FIX: Force .astype(str) first so .str accessor always works
-            t_df["Amount"] = t_df["Amount"].astype(str).str.replace(r'[$,]', '', regex=True)
+            # FIX: Apply safer cleaning function row-by-row
+            t_df["Amount"] = t_df["Amount"].apply(clean_currency)
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
@@ -123,7 +129,7 @@ def load_data_safe():
             c_df = pd.DataFrame(columns=["Type", "Name"])
             
         return t_df, c_df
-    except Exception as e:
+    except Exception:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data_safe()
@@ -142,13 +148,13 @@ def get_icon(cat_name, row_type):
     if "alesa" in n: return "👩"
     return "💸" if row_type == "Expense" else "💰"
 
-# --- EDITOR DIALOG ---
+# --- DIALOG ---
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
     clist = get_cat_list(row_data["Type"])
-    # Safe index lookup
+    # Safe Indexing
     try:
         c_idx = clist.index(row_data["Category"])
     except ValueError:
@@ -225,12 +231,10 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # Sort
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
         
-        # Header
         st.markdown("""
         <div class="hist-header">
             <div style="width:20%">DATE</div>
@@ -242,32 +246,37 @@ with tab3:
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             
-            # Format Data
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
-            amt_str = f"${row['Amount']:,.0f}"
+            amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             
-            # Colors: Green for Income, Red for Expense
-            # We apply this directly to the text color of the Price
-            text_color = "#d32f2f" if is_ex else "#2e7d32" 
-            prefix = "-" if is_ex else "+"
+            # Logic: Red for Expense (-), Green for Income (+)
+            if is_ex:
+                prefix = "-"
+                # Dark Red
+                color = "#d32f2f" 
+            else:
+                prefix = "+"
+                # Dark Green
+                color = "#2e7d32"
+                
+            amt_display = f"{prefix}${amt_val:,.0f}"
             
-            # 1. VISUAL CARD (HTML)
+            # 1. VISUAL CARD
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{text_color};">{prefix}{amt_str}</div>
+                    <div class="tr-amt" style="color:{color};">{amt_display}</div>
                 </div>
             """, unsafe_allow_html=True)
             
-            # 2. CLICK TARGET (Button)
+            # 2. OVERLAY BUTTON
             st.markdown('<div class="row-overlay">', unsafe_allow_html=True)
             if st.button(f"btn_{i}", key=f"h_{i}", label_visibility="hidden"):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
-                
     else:
         st.info("History is empty.")
 
