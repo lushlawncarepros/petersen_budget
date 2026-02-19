@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Compact 30px Row Height with 22.5px Buttons (25% reduction)
+# CSS: Compact 30px Row Height with 15px Buttons
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -30,7 +30,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 30px; 
-        margin-bottom: 2px; /* The 2px gap Ethan requested */
+        margin-bottom: 2px; /* The 2px gap requested */
         width: 100%;
         background-color: var(--secondary-background-color); 
         border-radius: 4px;
@@ -58,13 +58,13 @@ st.markdown("""
     .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
     
-    /* CLICK LAYER (Invisible Button Overlay) - Reduced to 22.5px (25% reduction from 30px) */
+    /* CLICK LAYER (Invisible Button Overlay) - Height set to 15px */
     .row-container .stButton {
         position: absolute;
-        top: 3.75px; /* Centered vertically (30 - 22.5) / 2 */
+        top: 7.5px; /* Centered vertically (30 - 15) / 2 */
         left: 0;
         width: 100%;
-        height: 22.5px;
+        height: 15px;
         z-index: 5;
     }
     
@@ -74,8 +74,11 @@ st.markdown("""
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
+        /* Aggressive reset to remove grey outlines */
+        border-style: none !important;
+        background: transparent !important;
         width: 100% !important;
-        height: 22.5px !important;
+        height: 15px !important;
         padding: 0 !important;
         margin: 0 !important;
         display: block !important;
