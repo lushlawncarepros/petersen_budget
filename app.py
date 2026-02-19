@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Compact 30px Row Height for S25 Mobile
+# CSS: Compact 30px Row Height with 22.5px Buttons (25% reduction)
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -30,7 +30,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 30px; 
-        margin-bottom: 2px; /* The 2px gap you requested */
+        margin-bottom: 2px; /* The 2px gap Ethan requested */
         width: 100%;
         background-color: var(--secondary-background-color); 
         border-radius: 4px;
@@ -58,13 +58,13 @@ st.markdown("""
     .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
     
-    /* CLICK LAYER (Invisible Button Overlay) - Matched to 30px */
+    /* CLICK LAYER (Invisible Button Overlay) - Reduced to 22.5px (25% reduction from 30px) */
     .row-container .stButton {
         position: absolute;
-        top: 0;
+        top: 3.75px; /* Centered vertically (30 - 22.5) / 2 */
         left: 0;
         width: 100%;
-        height: 30px;
+        height: 22.5px;
         z-index: 5;
     }
     
@@ -75,7 +75,7 @@ st.markdown("""
         box-shadow: none !important;
         outline: none !important;
         width: 100% !important;
-        height: 30px !important;
+        height: 22.5px !important;
         padding: 0 !important;
         margin: 0 !important;
         display: block !important;
@@ -238,7 +238,8 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else: st.info("No data yet.")
+    else:
+        st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
