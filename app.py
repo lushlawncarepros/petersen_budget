@@ -9,35 +9,41 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Resetting to Default Spacing & Padding
+# CSS: Perfectly Aligned Overlay Buttons
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
     /* --- TAB STYLING --- */
-    /* Kept the bold tabs you liked */
     button[data-baseweb="tab"] p {
         font-size: 1.35rem !important; 
         font-weight: 800 !important;
     }
     
-    /* LEDGER ROW STYLING (Default Spacing) */
+    /* 1. THE ROW CONTAINER */
+    /* This creates a relative parent so the button can be positioned absolutely on top */
     .row-container {
         position: relative;
         width: 100%;
-        margin-bottom: 0.5rem; /* Standard Streamlit-like spacing */
+        height: 45px; /* Fixed height for perfect alignment */
+        margin-bottom: 8px; /* Natural spacing between rows */
     }
     
-    /* VISUAL LAYER (Text) */
+    /* 2. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: var(--secondary-background-color);
         border-radius: 8px;
-        padding: 12px; /* Restored standard padding */
+        padding: 0 12px; 
+        height: 45px; /* Matches container */
         width: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
         font-family: "Source Sans Pro", sans-serif;
         border: 1px solid rgba(128, 128, 128, 0.1);
     }
@@ -46,15 +52,17 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 1.0rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.1rem; font-weight: 800; text-align: right; }
     
-    /* CLICK LAYER (Invisible Button Overlay) */
-    /* Reset to cover the dynamic height of the row */
-    .row-container .stButton {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 5;
+    /* 3. THE CLICK LAYER (The Streamlit Button) */
+    /* We target the Streamlit element container inside our row-container to force it to overlap */
+    .row-container div[data-testid="element-container"] {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 45px !important;
+        z-index: 5 !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
     .row-container .stButton button {
@@ -64,8 +72,7 @@ st.markdown("""
         box-shadow: none !important;
         outline: none !important;
         width: 100% !important;
-        height: 100% !important;
-        min-height: 45px; /* Ensures a good touch target */
+        height: 45px !important;
         padding: 0 !important;
         margin: 0 !important;
         display: block !important;
@@ -263,7 +270,6 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
-        # History list with restored natural spacing
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
@@ -273,6 +279,7 @@ with tab3:
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
             
+            # This container now wraps both layers and forces them to align perfectly
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="trans-row">
