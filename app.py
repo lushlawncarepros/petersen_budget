@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Precise Vertical Positioning
+# CSS: High-Contrast Layout with Thick Delineator and Color-Coded Filters
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -34,7 +34,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* Bottom padding to shift text significantly higher */
+        /* Bottom padding to shift text significantly higher for centering */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -47,36 +47,11 @@ st.markdown("""
         overflow: hidden;
     }
     
-    .tr-date { 
-        width: 20%; 
-        font-size: 0.85rem; 
-        color: #111; 
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-    }
-    .tr-cat { 
-        width: 50%; 
-        font-size: 0.95rem; 
-        color: #222; 
-        font-weight: 600; 
-        white-space: nowrap; 
-        overflow: hidden; 
-        text-overflow: ellipsis; 
-        display: flex;
-        align-items: center;
-    }
-    .tr-amt { 
-        width: 30%; 
-        font-size: 1.05rem; 
-        font-weight: 800; 
-        text-align: right; 
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-    }
+    .tr-date { width: 20%; font-size: 0.85rem; color: #111; font-weight: 700; }
+    .tr-cat { width: 50%; font-size: 0.95rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. CLICK LAYER (Button Overlay) */
+    /* 2. THE CLICK LAYER (Button Overlay) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -98,27 +73,24 @@ st.markdown("""
         cursor: pointer;
     }
     
-    .row-container .stButton button:hover {
-        background-color: rgba(0,0,0,0.03) !important;
-    }
-    
-    /* Ledger Header - Bold Black Delineator Line added */
+    /* Ledger Header - Bold 8px Black Line */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
-        border-bottom: 5px solid #000; /* Increased thickness to 5px and forced pure black */
-        color: #444;
+        border-bottom: 8px solid #000 !important; /* Thick Black Line */
+        color: #111;
         font-size: 1.5rem; 
         font-weight: 800;
         text-transform: uppercase;
         background-color: white;
     }
 
-    /* --- FILTER UI SPACING --- */
+    /* --- FILTER UI SPACING & COLORS --- */
+    
     div[data-testid="stPopover"] { 
         width: 100%; 
-        margin-top: 25px !important;
+        margin-top: 25px !important; 
     }
     
     div[data-testid="stCheckbox"] { 
@@ -126,6 +98,18 @@ st.markdown("""
         padding-top: 5px !important;
     }
     
+    /* Custom Checkbox Colors */
+    /* Income = Green */
+    .income-filter div[data-testid="stCheckbox"] input:checked ~ div {
+        background-color: #2e7d32 !important;
+        border-color: #2e7d32 !important;
+    }
+    /* Expense = Red */
+    .expense-filter div[data-testid="stCheckbox"] input:checked ~ div {
+        background-color: #d32f2f !important;
+        border-color: #d32f2f !important;
+    }
+
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -280,13 +264,22 @@ with tab3:
                 end_f = st.date_input("To", last_day)
             
             with st.popover("Select Categories"):
+                # Income Section
+                st.markdown('<div class="income-filter">', unsafe_allow_html=True)
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
                 sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"filter_inc_{cat}")]
+                st.markdown('</div>', unsafe_allow_html=True)
+                
                 st.divider()
+                
+                # Expense Section
+                st.markdown('<div class="expense-filter">', unsafe_allow_html=True)
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"filter_exp_{cat}")]
+                st.markdown('</div>', unsafe_allow_html=True)
+                
                 all_selected = sel_inc + sel_exp
 
             work_df = df_t.copy()
