@@ -223,6 +223,9 @@ def edit_dialog(row_index, row_data):
 @st.dialog("Manage Category")
 def manage_cat_dialog(old_name, cat_type):
     st.write(f"Managing **{cat_type}**: {old_name}")
+    
+    # New: Ability to change Type (Expense/Income)
+    new_type = st.selectbox("Designation", ["Expense", "Income"], index=0 if cat_type == "Expense" else 1)
     new_name = st.text_input("Category Name", value=old_name)
     
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
@@ -230,13 +233,20 @@ def manage_cat_dialog(old_name, cat_type):
     c1, c2 = st.columns(2)
     with c1:
         if st.button("💾 Save Changes", use_container_width=True):
-            if new_name and new_name != old_name:
-                # 1. Update Category List
-                df_c.loc[(df_c["Type"] == cat_type) & (df_c["Name"] == old_name), "Name"] = new_name
+            if new_name and (new_name != old_name or new_type != cat_type):
+                # 1. Update Category List Entry
+                mask_c = (df_c["Type"] == cat_type) & (df_c["Name"] == old_name)
+                df_c.loc[mask_c, "Name"] = new_name
+                df_c.loc[mask_c, "Type"] = new_type
                 conn.update(worksheet="categories", data=df_c)
                 
-                # 2. Update all existing transactions with this category name
-                df_t.loc[df_t["Category"] == old_name, "Category"] = new_name
+                # 2. Sync all existing transactions
+                # Search by name. If name is changing, we find by old_name.
+                # Also update the Type column in transactions to match new_type.
+                mask_t = (df_t["Category"] == old_name)
+                df_t.loc[mask_t, "Category"] = new_name
+                df_t.loc[mask_t, "Type"] = new_type
+                
                 df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
                 conn.update(worksheet="transactions", data=df_t)
                 
@@ -248,7 +258,6 @@ def manage_cat_dialog(old_name, cat_type):
                 
     with c2:
         if st.button("🗑️ Delete", use_container_width=True):
-            # Only remove from category options, does NOT delete transactions (for safety)
             new_c = df_c[~((df_c["Type"] == cat_type) & (df_c["Name"] == old_name))]
             conn.update(worksheet="categories", data=new_c)
             st.success("Category Removed!")
@@ -358,13 +367,13 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
     st.divider()
-    st.header("Categories")
     
-    # 1. ADD CATEGORY FORM (with buffer)
+    # --- CATEGORY SECTION ---
+    st.header("Categories")
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
         cn = st.text_input("Name")
-        st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True) # 30px Buffer
+        st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
         if st.form_submit_button("Add Category", use_container_width=True):
             if cn:
                 st.cache_resource.clear()
@@ -375,16 +384,15 @@ with st.sidebar:
                 time.sleep(0.5)
                 st.rerun()
     
-    # 2. MANAGE CATEGORIES SECTION
+    # --- MANAGE CATEGORY SECTION (Updated UI and Header) ---
     st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
-    st.subheader("Manage Existing")
+    st.header("Manage Existing Category") # Matches Categories header style
+    
     manage_type = st.selectbox("View Type", ["Expense", "Income"], key="m_type")
     manage_list = sorted(df_c[df_c["Type"] == manage_type]["Name"].unique().tolist())
     target_cat = st.selectbox("Select Category", manage_list, key="m_list")
     
-    # 30px Buffer added here to match the form above
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
-    
     if st.button("🔧 Manage Selected", use_container_width=True):
         if target_cat:
             manage_cat_dialog(target_cat, manage_type)
