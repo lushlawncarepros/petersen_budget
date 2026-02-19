@@ -4,11 +4,12 @@ import plotly.express as px
 from datetime import datetime
 import time
 from streamlit_gsheets import GSheetsConnection
+from pandas.api.types import is_numeric_dtype
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Restoring the "Clean White Row" Design
+# CSS: Colored Rows + Invisible Click Overlay
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -17,24 +18,25 @@ st.markdown("""
     /* Remove default spacing */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
-    /* 1. VISUAL CARD STYLING (The White Row) */
+    /* 1. VISUAL CARD STYLING */
     .trans-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        background-color: white;
-        border-bottom: 1px solid #f0f2f6;
-        padding: 12px 5px;
+        padding: 8px 12px;
         height: 50px;
         font-family: "Source Sans Pro", sans-serif;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        border-radius: 8px; /* Slight roundness for the card */
+        margin-bottom: 2px; /* Tiny gap between colors */
     }
     
     /* Column Spacing */
-    .tr-date { width: 18%; font-size: 0.75rem; color: #999; font-weight: 500; }
+    .tr-date { width: 18%; font-size: 0.75rem; color: #666; font-weight: 600; }
     .tr-cat  { width: 52%; font-size: 0.9rem; color: #333; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 5px; }
-    .tr-amt  { width: 30%; font-size: 0.95rem; font-weight: 700; text-align: right; }
+    .tr-amt  { width: 30%; font-size: 0.95rem; font-weight: 800; text-align: right; }
     
-    /* 2. INVISIBLE BUTTON OVERLAY (The Clicker) */
+    /* 2. INVISIBLE BUTTON OVERLAY */
     .row-overlay button {
         background-color: transparent !important;
         color: transparent !important;
@@ -42,12 +44,12 @@ st.markdown("""
         width: 100%;
         height: 50px; /* Match row height */
         margin-top: -50px; /* Pull up to cover row */
-        z-index: 5;
+        z-index: 2;
         cursor: pointer;
     }
     
     .row-overlay button:hover {
-        background-color: rgba(0,0,0,0.02) !important;
+        background-color: rgba(255,255,255,0.2) !important; /* Subtle lighten on hover */
     }
     
     /* Global Button Polish */
@@ -57,9 +59,9 @@ st.markdown("""
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 5px;
+        padding: 5px 12px;
         border-bottom: 2px solid #333;
-        margin-bottom: 0px;
+        margin-bottom: 5px;
         color: #555;
         font-size: 0.7rem;
         font-weight: bold;
@@ -92,30 +94,30 @@ if not st.session_state["authenticated"]:
 # --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def clean_currency(val):
-    """Safely cleans currency strings or numbers."""
-    if isinstance(val, str):
-        return val.replace('$', '').replace(',', '').strip()
-    return val
-
-def load_data_safe():
+def load_data_smart():
     st.cache_data.clear()
     try:
-        t_df = conn.read(worksheet="transactions", ttl=0, dtype=str)
-        c_df = conn.read(worksheet="categories", ttl=0, dtype=str)
+        # Read standard (let pandas infer types first)
+        t_df = conn.read(worksheet="transactions", ttl=0)
+        c_df = conn.read(worksheet="categories", ttl=0)
         
         # --- CLEAN TRANSACTIONS ---
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             
-            # Ensure columns exist
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # FIX: Ensure it is a string before replacing (The Safety Patch)
-            t_df["Amount"] = t_df["Amount"].astype(str).apply(clean_currency)
-            t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
+            # SMART CLEAN: Check if Amount is already numeric
+            if is_numeric_dtype(t_df["Amount"]):
+                # If it's already numbers, just fill NaNs
+                t_df["Amount"] = t_df["Amount"].fillna(0)
+            else:
+                # If it's strings/objects, convert to string then clean
+                t_df["Amount"] = t_df["Amount"].astype(str).str.replace(r'[$,]', '', regex=True)
+                t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             
+            # Date Cleaning
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
@@ -129,10 +131,10 @@ def load_data_safe():
             c_df = pd.DataFrame(columns=["Type", "Name"])
             
         return t_df, c_df
-    except Exception:
+    except Exception as e:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
-df_t, df_c = load_data_safe()
+df_t, df_c = load_data_smart()
 
 def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
@@ -146,15 +148,15 @@ def get_icon(cat_name, row_type):
     if "gas" in n or "fuel" in n: return "⛽"
     if "ethan" in n: return "👤"
     if "alesa" in n: return "👩"
+    if "sav" in n: return "🏦"
     return "💸" if row_type == "Expense" else "💰"
 
-# --- DIALOG ---
+# --- EDITOR DIALOG ---
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
     clist = get_cat_list(row_data["Type"])
-    # Safe Indexing
     try:
         c_idx = clist.index(row_data["Category"])
     except ValueError:
@@ -197,7 +199,7 @@ with tab1:
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save"):
             if f_clist:
-                latest_t, _ = load_data_safe()
+                latest_t, _ = load_data_smart()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date),
                     "Type": t_type,
@@ -231,6 +233,7 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
+        # Sort
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
@@ -251,26 +254,28 @@ with tab3:
             icon = get_icon(row['Category'], row['Type'])
             amt_val = row['Amount']
             
-            # Colored Numbers Logic
+            # Style Logic
             if is_ex:
                 prefix = "-"
-                color = "#d32f2f" # Red
+                text_color = "#c62828" # Dark Red Text
+                bg_color = "#ffebee"   # Soft Red Background
             else:
                 prefix = "+"
-                color = "#2e7d32" # Green
+                text_color = "#2e7d32" # Dark Green Text
+                bg_color = "#e8f5e9"   # Soft Green Background
                 
             amt_display = f"{prefix}${amt_val:,.0f}"
             
-            # 1. VISUAL ROW (HTML)
+            # 1. VISUAL CARD
             st.markdown(f"""
-                <div class="trans-row">
+                <div class="trans-row" style="background-color: {bg_color};">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{color};">{amt_display}</div>
+                    <div class="tr-amt" style="color:{text_color};">{amt_display}</div>
                 </div>
             """, unsafe_allow_html=True)
             
-            # 2. CLICK OVERLAY (Button)
+            # 2. CLICK OVERLAY
             st.markdown('<div class="row-overlay">', unsafe_allow_html=True)
             if st.button(f"btn_{i}", key=f"h_{i}", label_visibility="hidden"):
                 edit_dialog(i, row)
@@ -298,7 +303,7 @@ with st.sidebar:
         if st.form_submit_button("Add Category"):
             if cn:
                 st.cache_resource.clear()
-                _, latest_c = load_data_safe()
+                _, latest_c = load_data_smart()
                 updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c)
                 st.success("Added!")
