@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Exact measurements with updated Filter spacing
+# CSS: High-Contrast Layout with Exact Measurements
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -100,13 +100,21 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* General UI Tweaks - Filter spacing updated here */
+    /* General UI Tweaks */
     div[data-testid="stPopover"] { 
         width: 100%; 
         margin-top: 15px !important; 
         margin-bottom: 15px !important; 
     }
     .stButton>button { border-radius: 12px; }
+
+    /* Decoy CSS to hide the focus stealer */
+    .decoy-focus {
+        height: 0;
+        width: 0;
+        opacity: 0;
+        position: absolute;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -177,12 +185,18 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
+    # Decoy element to steal initial focus from the date input
+    st.markdown('<div class="decoy-focus"><button nonce="decoy"></button></div>', unsafe_allow_html=True)
+    
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
     cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
+    
+    # 30px buffer requested
+    st.markdown('<div style="margin-bottom: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
     with c1:
