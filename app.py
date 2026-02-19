@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast "Nailed It" Layout with Gap Fixes
+# CSS: High-Contrast "Nailed It" Layout with Perfect Vertical Alignment
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -22,35 +22,37 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 60px; 
-        margin-bottom: 0px; /* Zero margin to prevent gaps */
+        margin-bottom: 0px; /* Zero margin to keep rows flush */
         width: 100%;
-        background-color: white; /* Ensure base is white */
+        background-color: white; 
     }
     
     /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
-        align-items: center;
+        align-items: center; /* Vertical Center */
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #e0e0e0;
-        padding: 0 10px;
+        padding: 0 10px; /* Only horizontal padding */
         height: 60px;
         width: 100%;
         position: absolute;
         top: 0;
         left: 0;
         z-index: 1;
-        pointer-events: none; /* Touches pass through to button underneath */
+        pointer-events: none; /* Touches pass to button below */
         font-family: "Source Sans Pro", sans-serif;
+        line-height: normal; /* Fixes "low-hanging" text issues */
     }
     
-    /* Darkened Date Text for high visibility */
+    /* Darkened Date Text */
     .tr-date { 
         width: 20%; 
         font-size: 0.85rem; 
-        color: #111; /* Solid Black */
+        color: #111; 
         font-weight: 700; 
+        margin: 0 !important;
     }
     .tr-cat { 
         width: 50%; 
@@ -60,12 +62,14 @@ st.markdown("""
         white-space: nowrap; 
         overflow: hidden; 
         text-overflow: ellipsis; 
+        margin: 0 !important;
     }
     .tr-amt { 
         width: 30%; 
         font-size: 1.05rem; 
         font-weight: 800; 
         text-align: right; 
+        margin: 0 !important;
     }
     
     /* 2. THE CLICK LAYER (Button Overlay) */
@@ -94,7 +98,7 @@ st.markdown("""
         background-color: rgba(0,0,0,0.03) !important;
     }
     
-    /* Ledger Header - Reverted to clean simple style */
+    /* Reverted Header Style from "Nailed It" version */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -253,13 +257,11 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # Default Month Range
         today = date.today()
         first_day = today.replace(day=1)
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
         with st.expander("🔍 Filter History", expanded=False):
-            # Restored to standard behavior (auto-stacking)
             c1, c2 = st.columns(2)
             with c1:
                 start_f = st.date_input("From", first_day)
@@ -289,7 +291,7 @@ with tab3:
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
         # Wrapping ledger in a forced-white container to block background
-        st.markdown('<div style="background-color:white;">', unsafe_allow_html=True)
+        st.markdown('<div style="background-color:white; width:100%;">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
