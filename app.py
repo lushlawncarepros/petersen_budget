@@ -184,25 +184,19 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
-    # Hidden button to steal initial focus from the date input
     st.markdown('<div class="decoy-focus"><button nonce="focus-fix"></button></div>', unsafe_allow_html=True)
-    
-    # Updated text to include "Entry Created by"
-    st.markdown(f"Editing: **{row_data['Category']}** &nbsp; | &nbsp; Entry Created by: **{row_data.get('User', 'Unknown')}**")
+    st.write(f"Editing: **{row_data['Category']}** &nbsp; | &nbsp; Entry Created by: **{row_data.get('User', 'Unknown')}**")
     
     e_date = st.date_input("Date", row_data["Date"])
     cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     
-    # Memo added to editing view
     raw_memo = str(row_data.get("Memo", ""))
     memo_val = "" if raw_memo.lower() == "nan" else raw_memo
     e_memo = st.text_input("Memo", value=memo_val)
     
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
-    
-    # 30px Buffer before action buttons
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -226,10 +220,43 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
+@st.dialog("Manage Category")
+def manage_cat_dialog(old_name, cat_type):
+    st.write(f"Managing **{cat_type}**: {old_name}")
+    new_name = st.text_input("Category Name", value=old_name)
+    
+    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("💾 Save Changes", use_container_width=True):
+            if new_name and new_name != old_name:
+                # 1. Update Category List
+                df_c.loc[(df_c["Type"] == cat_type) & (df_c["Name"] == old_name), "Name"] = new_name
+                conn.update(worksheet="categories", data=df_c)
+                
+                # 2. Update all existing transactions with this category name
+                df_t.loc[df_t["Category"] == old_name, "Category"] = new_name
+                df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
+                conn.update(worksheet="transactions", data=df_t)
+                
+                st.success("Updated everywhere!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.warning("No changes made.")
+                
+    with c2:
+        if st.button("🗑️ Delete", use_container_width=True):
+            # Only remove from category options, does NOT delete transactions (for safety)
+            new_c = df_c[~((df_c["Type"] == cat_type) & (df_c["Name"] == old_name))]
+            conn.update(worksheet="categories", data=new_c)
+            st.success("Category Removed!")
+            time.sleep(1)
+            st.rerun()
+
 # --- MAIN APP ---
 st.title("📊 Petersen Budget")
-
-# Space added between title and tabs
 st.markdown('<div style="margin-bottom: 40px;"></div>', unsafe_allow_html=True)
 
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
@@ -241,16 +268,9 @@ with tab1:
         f_date = st.date_input("Date", datetime.now())
         f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
-        
-        # New Memo field
-        f_memo = st.text_input("Memo", placeholder="Optional details (e.g. car savings)")
-        
-        # value=None allows typing to start in the "ones" place immediately
+        f_memo = st.text_input("Memo", placeholder="Optional details")
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
-        
-        # 30px Buffer
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
-        
         if st.form_submit_button("Save"):
             if f_cats and f_amt is not None:
                 latest_t, _ = load_data_clean()
@@ -270,33 +290,23 @@ with tab1:
 
 with tab2:
     if not df_t.empty:
-        # Prepare data for Sunburst (Interactive Pie Breakdown)
         viz_df = df_t.copy()
-        # Clean Memos for the chart
         viz_df["Memo"] = viz_df["Memo"].apply(lambda x: "Unspecified" if str(x).lower() == "nan" or str(x).strip() == "" else str(x))
-        
         inc_val = viz_df[viz_df["Type"] == "Income"]["Amount"].sum()
         exp_val = viz_df[viz_df["Type"] == "Expense"]["Amount"].sum()
         st.metric("Net Balance", f"${(inc_val - exp_val):,.2f}", delta=f"${inc_val:,.2f} In")
-        
         c1, c2 = st.columns(2)
         with c1:
             dx = viz_df[viz_df["Type"] == "Expense"]
             if not dx.empty:
-                # Sunburst provides the interactive "Breakdown" requested
-                fig_ex = px.sunburst(dx, path=['Category', 'Memo'], values='Amount', 
-                                   title="Expenses Breakdown",
-                                   color_discrete_sequence=px.colors.qualitative.Pastel)
+                fig_ex = px.sunburst(dx, path=['Category', 'Memo'], values='Amount', title="Expenses Breakdown")
                 st.plotly_chart(fig_ex, use_container_width=True)
         with c2:
             di = viz_df[viz_df["Type"] == "Income"]
             if not di.empty:
-                fig_in = px.sunburst(di, path=['Category', 'Memo'], values='Amount', 
-                                   title="Income Breakdown",
-                                   color_discrete_sequence=px.colors.qualitative.Safe)
+                fig_in = px.sunburst(di, path=['Category', 'Memo'], values='Amount', title="Income Breakdown")
                 st.plotly_chart(fig_in, use_container_width=True)
-    else:
-        st.info("No data yet.")
+    else: st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -304,7 +314,6 @@ with tab3:
         first_day = today.replace(day=1)
         last_day_num = calendar.monthrange(today.year, today.month)[1]
         last_day = today.replace(day=last_day_num)
-
         with st.expander("🔍 Filter View"):
             c1, c2 = st.columns(2)
             with c1: start_f = st.date_input("From", first_day)
@@ -318,19 +327,12 @@ with tab3:
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
                 all_selected = sel_inc + sel_exp
-
             work_df = df_t.copy()
-            work_df = work_df[
-                (work_df["Date"].dt.date >= start_f) & 
-                (work_df["Date"].dt.date <= end_f) & 
-                (work_df["Category"].isin(all_selected))
-            ]
+            work_df = work_df[(work_df["Date"].dt.date >= start_f) & (work_df["Date"].dt.date <= end_f) & (work_df["Category"].isin(all_selected))]
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
             st.markdown(f"**Filtered Net:** `${f_net:,.2f}`")
-
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
-        
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
@@ -339,23 +341,10 @@ with tab3:
             icon = get_icon(row['Category'], row['Type'])
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
-            
-            # Show memo in parenthesis if it exists
             memo_display = f" ({row['Memo']})" if str(row.get('Memo', '')) != 'nan' and str(row.get('Memo', '')).strip() != '' else ''
-            
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
-            # The visual text row
-            st.markdown(f"""
-                <div class="trans-row">
-                    <div class="tr-date"><span>{d_str}</span></div>
-                    <div class="tr-cat">{icon} {row['Category']}{memo_display}</div>
-                    <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # The actual Streamlit button (made invisible by CSS)
-            if st.button(" ", key=f"h_{i}", use_container_width=True):
-                edit_dialog(i, row)
+            st.markdown(f'<div class="trans-row"><div class="tr-date"><span>{d_str}</span></div><div class="tr-cat">{icon} {row["Category"]}{memo_display}</div><div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div></div>', unsafe_allow_html=True)
+            if st.button(" ", key=f"h_{i}", use_container_width=True): edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
     else: st.info("No data yet.")
 
@@ -370,10 +359,13 @@ with st.sidebar:
         st.rerun()
     st.divider()
     st.header("Categories")
+    
+    # 1. ADD CATEGORY FORM (with buffer)
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
         cn = st.text_input("Name")
-        if st.form_submit_button("Add Category"):
+        st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True) # 30px Buffer
+        if st.form_submit_button("Add Category", use_container_width=True):
             if cn:
                 st.cache_resource.clear()
                 _, latest_c = load_data_clean()
@@ -382,3 +374,14 @@ with st.sidebar:
                 st.success("Added!")
                 time.sleep(0.5)
                 st.rerun()
+    
+    # 2. MANAGE CATEGORIES SECTION
+    st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
+    st.subheader("Manage Existing")
+    manage_type = st.selectbox("View Type", ["Expense", "Income"], key="m_type")
+    manage_list = sorted(df_c[df_c["Type"] == manage_type]["Name"].unique().tolist())
+    target_cat = st.selectbox("Select Category", manage_list, key="m_list")
+    
+    if st.button("🔧 Manage Selected", use_container_width=True):
+        if target_cat:
+            manage_cat_dialog(target_cat, manage_type)
