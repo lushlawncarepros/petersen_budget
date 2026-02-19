@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Precise Checkbox Styling
+# CSS: High-Contrast Layout with Visual Highlighting for Categories
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -73,18 +73,14 @@ st.markdown("""
         cursor: pointer;
     }
     
-    .row-container .stButton button:hover {
-        background-color: rgba(0,0,0,0.03) !important;
-    }
-    
-    /* Ledger Header */
+    /* Ledger Header - Large 1.5rem labels as requested */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
         border-bottom: 2px solid #eee; 
         color: #111;
-        font-size: 1.1rem; 
+        font-size: 1.5rem; 
         font-weight: 800;
         text-transform: uppercase;
         background-color: white;
@@ -102,19 +98,20 @@ st.markdown("""
         padding-top: 5px !important;
     }
     
-    /* TARGETING ONLY THE CHECKBOX SQUARE (+ div instead of ~ div) */
+    /* COLOR CODING: Highlight the checkbox and text background */
     
-    /* 1. Default (Expenses) = Red */
-    [data-testid="stCheckbox"] input:checked + div {
-        background-color: #d32f2f !important;
-        border-color: #d32f2f !important;
-    }
-
-    /* 2. Income Checkboxes = Green */
-    /* We use the key prefix 'f_inc_' to target these specifically in the DOM */
-    div[data-testid="stCheckbox"]:has(input[aria-label*="❎"]) input:checked + div {
+    /* Income = Green */
+    .income-filter div[data-testid="stCheckbox"] input:checked ~ div {
         background-color: #2e7d32 !important;
         border-color: #2e7d32 !important;
+        color: white !important;
+    }
+    
+    /* Expense = Red */
+    .expense-filter div[data-testid="stCheckbox"] input:checked ~ div {
+        background-color: #d32f2f !important;
+        border-color: #d32f2f !important;
+        color: white !important;
     }
 
     .stButton>button { border-radius: 12px; }
@@ -271,17 +268,21 @@ with tab3:
                 end_f = st.date_input("To", last_day)
             
             with st.popover("Select Categories"):
+                # Income Section with Green Highlighting
+                st.markdown('<div class="income-filter">', unsafe_allow_html=True)
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
-                # Using ❎ emoji for income identification
                 sel_inc = [cat for cat in inc_list if st.checkbox(f"❎ {cat}", value=True, key=f"f_inc_{cat}")]
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 st.divider()
                 
+                # Expense Section with Red Highlighting
+                st.markdown('<div class="expense-filter">', unsafe_allow_html=True)
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
-                # Standard labeling for expenses
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 all_selected = sel_inc + sel_exp
 
