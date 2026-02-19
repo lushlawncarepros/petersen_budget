@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Dynamic Tabs and Vertical Alignment
+# CSS: High-Contrast Layout with Dynamic Green Tabs
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -19,13 +19,23 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* --- TAB STYLING --- */
-    /* Target the tab labels: dynamic color for dark mode & 25% size reduction */
+    /* Target all tab labels: bold and sized */
     button[data-baseweb="tab"] p {
-        font-size: 1.35rem !important; /* Reduced from 1.8rem */
+        font-size: 1.35rem !important; /* Reduced by 25% from 1.8rem */
         font-weight: 800 !important;
-        color: var(--text-color) !important; /* Dynamic: White in dark mode, Black in light */
+        color: var(--text-color) !important; /* Dynamic color for dark/light mode */
     }
     
+    /* Target the SELECTED tab text color: FORCE GREEN */
+    button[aria-selected="true"] p {
+        color: #2e7d32 !important;
+    }
+    
+    /* Target the SELECTED tab underline color: FORCE GREEN */
+    button[aria-selected="true"] div {
+        background-color: #2e7d32 !important;
+    }
+
     /* THE ROW CONTAINER */
     .row-container {
         position: relative; 
@@ -42,7 +52,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* 20px bottom padding for perfect vertical balance on mobile */
+        /* 20px bottom padding to shift text up for perfect vertical balance on mobile */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -81,7 +91,11 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Ledger Header Styling */
+    .row-container .stButton button:hover {
+        background-color: rgba(0,0,0,0.03) !important;
+    }
+    
+    /* Ledger Header - Refined Size */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -242,7 +256,8 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else: st.info("No data yet.")
+    else:
+        st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
