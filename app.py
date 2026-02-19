@@ -8,67 +8,60 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: TRANSFORM BUTTONS INTO COLORED ROWS (TIGHT LAYOUT)
+# CSS: Custom HTML List with Invisible Click Overlay
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove vertical gaps between rows */
-    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
+    /* 1. VISUAL CARD STYLING */
+    .trans-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background-color: white;
+        border-bottom: 1px solid #f0f2f6;
+        padding: 12px 5px; /* Vertical padding breathes, horizontal keeps it aligned */
+        height: 55px;
+        font-family: "Source Sans Pro", sans-serif;
+    }
     
-    /* Global Button Reset for History */
-    .stButton>button {
+    /* Column Spacing */
+    .tr-date { width: 15%; font-size: 0.75rem; color: #999; font-weight: 500; }
+    .tr-cat  { width: 55%; font-size: 0.9rem; color: #333; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; }
+    .tr-amt  { width: 30%; font-size: 0.95rem; font-weight: 700; text-align: right; }
+    
+    /* 2. INVISIBLE BUTTON OVERLAY */
+    /* This button sits exactly on top of the visual card but is invisible */
+    .row-overlay button {
+        background-color: transparent !important;
+        color: transparent !important;
+        border: none !important;
         width: 100%;
-        border-radius: 0px; /* Square edges for list look */
-        height: 3.8em;
-        padding: 0 12px;
-        font-family: "Source Code Pro", monospace;
-        font-size: 0.85rem;
-        font-weight: 600;
+        height: 55px; /* Must match .trans-row height */
+        margin-top: -55px; /* Pulls it up to cover the row */
+        z-index: 2;
+        cursor: pointer;
+    }
+    
+    .row-overlay button:hover {
+        background-color: rgba(0,0,0,0.02) !important; /* Slight hover effect */
+        color: transparent !important;
+    }
+    
+    /* Global Button Polish */
+    .stButton>button { border-radius: 10px; }
+    
+    /* Header */
+    .hist-header {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        transition: 0.1s;
-        border: none;
-        border-bottom: 1px solid rgba(0,0,0,0.05);
-        margin-bottom: 0px !important;
-    }
-    
-    /* First and Last items radius tweak (Optional polish) */
-    div:first-child > .stButton > button { border-top-left-radius: 10px; border-top-right-radius: 10px; }
-    div:last-child > .stButton > button { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; border-bottom: none; }
-    
-    /* EXPENSE ROW STYLE */
-    div.expense-row > button {
-        background-color: #ffebee !important; /* Soft Red */
-        color: #c62828 !important;            /* Dark Red Text */
-        border-left: 6px solid #ef5350 !important;
-    }
-    
-    /* INCOME ROW STYLE */
-    div.income-row > button {
-        background-color: #e8f5e9 !important; /* Soft Green */
-        color: #2e7d32 !important;            /* Dark Green Text */
-        border-left: 6px solid #66bb6a !important;
-    }
-    
-    /* Hover Effects */
-    div.expense-row > button:hover { background-color: #ffcdd2 !important; }
-    div.income-row > button:hover { background-color: #c8e6c9 !important; }
-
-    /* Dialog styling */
-    div[data-testid="stDialog"] { border-radius: 20px; }
-    
-    /* Header Styling */
-    .hist-header {
-        font-family: "Source Code Pro", monospace;
-        font-size: 0.75rem;
-        color: #888;
-        font-weight: bold;
-        padding: 10px 12px;
-        margin-bottom: 0px;
+        padding: 0 5px 5px 5px;
         border-bottom: 2px solid #eee;
+        margin-bottom: 5px;
+        color: #888;
+        font-size: 0.7rem;
+        font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -109,10 +102,8 @@ def load_data_safe():
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # FIX: Force .astype(str) before string replacement to prevent crashes
             t_df["Amount"] = t_df["Amount"].astype(str).str.replace(r'[$,]', '', regex=True)
             t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
-            
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
@@ -125,9 +116,7 @@ def load_data_safe():
             c_df = pd.DataFrame(columns=["Type", "Name"])
             
         return t_df, c_df
-    except Exception as e:
-        # Graceful failure - return empty DF but log error
-        st.sidebar.error(f"Data Error: {e}")
+    except Exception:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data_safe()
@@ -144,10 +133,9 @@ def get_icon(cat_name, row_type):
     if "gas" in n or "fuel" in n: return "⛽"
     if "ethan" in n: return "👤"
     if "alesa" in n: return "👩"
-    if "sav" in n: return "🏦"
     return "💸" if row_type == "Expense" else "💰"
 
-# --- DIALOG ---
+# --- EDITOR DIALOG ---
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
@@ -230,7 +218,6 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # Sort
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
@@ -238,35 +225,38 @@ with tab3:
         # Header
         st.markdown("""
         <div class="hist-header">
-            <span>DATE</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span>CATEGORY</span><span style="float:right">PRICE</span>
+            <div style="width:20%">DATE</div>
+            <div style="width:50%">CATEGORY</div>
+            <div style="width:30%; text-align:right">PRICE</div>
         </div>
         """, unsafe_allow_html=True)
         
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
             
+            # Format Data
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
-            amt_str = f"${row['Amount']:,.0f}"
+            
+            # Icons and Styling
             icon = get_icon(row['Category'], row['Type'])
+            prefix = "-" if is_ex else "+"
+            color = "#d32f2f" if is_ex else "#2e7d32" # Red or Green
             
-            # Truncate category
-            cat_str = row['Category']
-            if len(cat_str) > 14: cat_str = cat_str[:13] + "…"
+            # 1. VISUAL CARD (HTML)
+            st.markdown(f"""
+                <div class="trans-row">
+                    <div class="tr-date">{d_str}</div>
+                    <div class="tr-cat">{icon} {row['Category']}</div>
+                    <div class="tr-amt" style="color:{color};">{prefix}${row['Amount']:,.0f}</div>
+                </div>
+            """, unsafe_allow_html=True)
             
-            # Construct Button Label (Monospace Alignment)
-            # Date (Left) | Icon + Category (Middle) | Price (Right)
-            cat_display = f"{icon} {cat_str}"
-            label = f"{d_str:<8}{cat_display:<16}{amt_str:>8}"
-            
-            # Apply CSS Wrapper
-            css_class = "expense-row" if is_ex else "income-row"
-            
-            st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-            if st.button(label, key=f"btn_{i}", use_container_width=True):
+            # 2. CLICK TARGET (Button)
+            st.markdown('<div class="row-overlay">', unsafe_allow_html=True)
+            if st.button(f"btn_{i}", key=f"h_{i}", label_visibility="hidden"):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
-                
     else:
         st.info("History is empty.")
 
