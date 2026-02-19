@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Exact Measurements
+# CSS: High-Contrast Layout with Invisible Overlay Buttons
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -24,7 +24,7 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* Ledger Header - LINE REMOVED */
+    /* Ledger Header - No bottom line */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -35,7 +35,7 @@ st.markdown("""
         background-color: transparent;
     }
 
-    /* Row Container Height: 25px; margin-bottom: 0px */
+    /* 3. LAYOUT SPACING - Row Container Height: 25px; margin-bottom: 0px */
     .row-container {
         position: relative; 
         height: 25px; 
@@ -52,13 +52,13 @@ st.markdown("""
         background-color: var(--secondary-background-color);
         border-radius: 8px;
         padding: 0px 12px 0px 12px !important; 
-        height: 40px; 
+        height: 40px; /* Visual row height */
         width: 100%;
         position: absolute;
         top: 0; 
         left: 0;
         z-index: 1;
-        pointer-events: none;
+        pointer-events: none; /* Allows clicks to pass through to the button beneath */
         font-family: "Source Sans Pro", sans-serif;
         border: 1px solid rgba(128, 128, 128, 0.1);
         box-sizing: border-box;
@@ -68,13 +68,13 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. INVISIBLE CLICK BUTTON (.stButton button) */
+    /* 2. INVISIBLE CLICK BUTTON (.stButton button) - THE OVERLAY METHOD */
     .row-container div[data-testid="element-container"] {
         position: absolute !important;
         top: 0 !important;
         left: 0 !important;
         width: 100% !important;
-        height: 45px !important;
+        height: 45px !important; /* Button hit-box height */
         z-index: 5 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -94,6 +94,7 @@ st.markdown("""
         cursor: pointer;
     }
     
+    /* Hover feedback for the invisible row */
     .row-container .stButton button:hover {
         background-color: rgba(128,128,128,0.05) !important;
     }
@@ -106,7 +107,7 @@ st.markdown("""
     }
     .stButton>button { border-radius: 12px; }
 
-    /* Decoy CSS to hide the focus stealer */
+    /* Decoy CSS to hide the focus stealer in dialogs */
     .decoy-focus {
         height: 0;
         width: 0;
@@ -184,19 +185,17 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
-    # Decoy element to steal initial focus from the date input
+    # Hidden button to steal initial focus from the date input
     st.markdown('<div class="decoy-focus"><button nonce="focus-fix"></button></div>', unsafe_allow_html=True)
-    
     st.write(f"Editing: **{row_data['Category']}**")
     
     e_date = st.date_input("Date", row_data["Date"])
     cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
-    
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
-    # 30px Buffer
+    # 30px Buffer before action buttons
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -304,6 +303,7 @@ with tab3:
             prefix = "-" if is_ex else "+"
             
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
+            # The visual text row
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date"><span>{d_str}</span></div>
@@ -311,6 +311,8 @@ with tab3:
                     <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
+            
+            # The actual Streamlit button (made invisible by CSS)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
