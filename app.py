@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Exact Provided Measurements
+# CSS: High-Contrast Layout with Exact Measurements
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -28,7 +28,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 45px; 
-        margin-bottom: 8px; /* Gap between rows */
+        margin-bottom: 8px; 
         width: 100%;
         background-color: transparent; 
     }
@@ -40,12 +40,13 @@ st.markdown("""
         justify-content: space-between;
         background-color: var(--secondary-background-color);
         border-radius: 8px;
-        /* Padding: Top 4px, Right 12px, Bottom 0px, Left 12px */
-        padding: 4px 12px 0px 12px !important; 
+        /* Padding: Top 0px, Right 12px, Bottom 0px, Left 12px */
+        padding: 0px 12px 0px 12px !important; 
         height: 40px; /* Total Height: 40px */
         width: 100%;
         position: absolute;
-        top: 2.5px; /* Centered vertically within the 45px container (45-40)/2 */
+        /* Centered vertically within 45px container: (45 - 40) / 2 = 2.5px */
+        top: 2.5px; 
         left: 0;
         z-index: 1;
         pointer-events: none;
@@ -149,7 +150,7 @@ def load_data_clean():
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
-            t_df["Amount"] = t_df["Amount"].apply(safe_float)
+            t_df["Amount"] = t_df["Amount"].at.apply(safe_float)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
