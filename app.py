@@ -9,42 +9,22 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Precise Green Accents
+# CSS: High-Contrast Layout with Vertical Alignment Fixes (Colors handled by config.toml)
 st.markdown("""
     <style>
-    /* 1. GLOBAL PRIMARY COLOR */
-    :root {
-        --primary-color: #2e7d32;
-    }
-
-    /* 2. TAB STYLING: Bold and Green when active */
+    /* Hide Sidebar Nav */
+    div[data-testid="stSidebarNav"] { display: none; }
+    
+    /* Remove vertical gaps between block elements */
+    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
+    
+    /* --- TAB STYLING --- */
     button[data-baseweb="tab"] p {
         font-size: 1.35rem !important; 
         font-weight: 800 !important;
     }
-    button[aria-selected="true"] p {
-        color: #2e7d32 !important;
-    }
-    div[data-baseweb="tab-highlight"] {
-        background-color: #2e7d32 !important;
-    }
-
-    /* 3. PRECISE WIDGET STYLING (Green Checkboxes & Radios) */
-    /* This targets ONLY the visual indicator box/circle */
-    div[data-testid="stCheckbox"] input:checked + div,
-    div[data-testid="stRadio"] input:checked + div {
-        background-color: #2e7d32 !important;
-        border-color: #2e7d32 !important;
-    }
     
-    /* This PREVENTS the text labels from being highlighted */
-    div[data-testid="stWidgetLabel"] div, 
-    div[data-testid="stWidgetLabel"] p {
-        background-color: transparent !important;
-        background: none !important;
-    }
-
-    /* 4. TRANSACTION ROW STYLING (Centering & Balance) */
+    /* THE ROW CONTAINER */
     .row-container {
         position: relative; 
         height: 60px; 
@@ -53,13 +33,14 @@ st.markdown("""
         background-color: transparent; 
     }
     
+    /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
         border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
+        /* 20px bottom padding shifts text up for perfect vertical balance on S25 */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -76,7 +57,7 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 5. CLICK LAYER */
+    /* 2. THE CLICK LAYER (Button Overlay) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -102,7 +83,7 @@ st.markdown("""
         background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* 6. LEDGER HEADERS: Reduced size & Bold */
+    /* Ledger Header - Refined Size */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -114,11 +95,17 @@ st.markdown("""
         background-color: transparent;
     }
 
-    /* 7. GENERAL UI CLEANUP */
-    div[data-testid="stSidebarNav"] { display: none; }
-    [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    div[data-testid="stPopover"] { width: 100%; margin-top: 25px !important; }
-    div[data-testid="stCheckbox"] { margin-bottom: 12px !important; padding-top: 5px !important; }
+    /* --- FILTER UI SPACING --- */
+    div[data-testid="stPopover"] { 
+        width: 100%; 
+        margin-top: 25px !important; 
+    }
+    
+    div[data-testid="stCheckbox"] { 
+        margin-bottom: 12px !important; 
+        padding-top: 5px !important;
+    }
+
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
