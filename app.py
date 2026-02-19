@@ -9,24 +9,22 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Refined Mobile Layout & Spacing Fixes
+# CSS: Absolute Overlays, Forced Flex Rows, and Spacing
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove vertical gaps between rows in History list */
+    /* History List: No gaps between rows */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
-    /* THE ROW CONTAINER */
+    /* 1. HISTORY LEDGER STYLING */
     .row-container {
         position: relative; 
         height: 60px; 
         margin-bottom: 2px;
         width: 100%;
     }
-    
-    /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center;
@@ -43,21 +41,12 @@ st.markdown("""
         pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
     }
-    
     .tr-date { width: 20%; font-size: 0.85rem; color: #000; font-weight: 800; }
     .tr-cat { width: 50%; font-size: 0.95rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 900; text-align: right; }
     
-    /* 2. CLICK LAYER (Invisible Button) */
-    .row-container .stButton {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 60px;
-        z-index: 5;
-    }
-    
+    /* Click Layer */
+    .row-container .stButton { position: absolute; top: 0; left: 0; width: 100%; height: 60px; z-index: 5; }
     .row-container .stButton button {
         background-color: transparent !important;
         color: transparent !important;
@@ -69,8 +58,32 @@ st.markdown("""
         display: block !important;
         cursor: pointer;
     }
+
+    /* 2. FILTER UI STYLING */
+    /* Force dates to stay in one row even on mobile */
+    .force-row {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+        align-items: center;
+        margin-bottom: 10px; /* Space between dates and Category button */
+    }
+    .force-row > div {
+        flex: 1;
+    }
+
+    /* Hide standard date labels to make boxes shorter */
+    div[data-testid="stDateInput"] label { display: none !important; }
     
-    /* Header Styling */
+    .filter-section-header {
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: #888;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+    }
+
+    /* Header for Ledger */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -82,27 +95,14 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    /* Filter UI tweaks */
+    /* Polish */
+    .stButton>button { border-radius: 12px; }
     div[data-testid="stPopover"] { width: 100%; }
     div[data-testid="stCheckbox"] { margin-bottom: 8px !important; }
-    
-    /* Force date inputs to look shorter by reducing label space */
-    div[data-testid="stDateInput"] label { display: none; }
-    
-    .filter-label {
-        font-size: 0.7rem;
-        font-weight: bold;
-        color: #888;
-        margin-bottom: 2px;
-        text-transform: uppercase;
-    }
-
-    /* Button Radius */
-    .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- AUTHENTICATION ---
+# --- AUTH ---
 USERS = {"ethan": "petersen1", "alesa": "petersen2"}
 if "authenticated" not in st.session_state:
     params = st.query_params
@@ -134,8 +134,7 @@ def safe_float(val):
             clean = val.replace('$', '').replace(',', '').strip()
             return float(clean) if clean else 0.0
         return 0.0
-    except:
-        return 0.0
+    except: return 0.0
 
 def load_data_clean():
     st.cache_data.clear()
@@ -149,16 +148,11 @@ def load_data_clean():
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
-        else:
-            t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
-            
-        if c_df is not None and not c_df.empty:
-            c_df.columns = [str(c).strip().title() for c in c_df.columns]
-        else:
-            c_df = pd.DataFrame(columns=["Type", "Name"])
+        else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+        if c_df is not None and not c_df.empty: c_df.columns = [str(c).strip().title() for c in c_df.columns]
+        else: c_df = pd.DataFrame(columns=["Type", "Name"])
         return t_df, c_df
-    except:
-        return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
+    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data_clean()
 
@@ -225,8 +219,7 @@ with tab1:
                 st.success(f"Saved {f_cat}!")
                 time.sleep(1)
                 st.rerun()
-            else:
-                st.error("Please add a category first!")
+            else: st.error("Please add a category first!")
 
 with tab2:
     if not df_t.empty:
@@ -240,8 +233,7 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else:
-        st.info("No data yet.")
+    else: st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -251,13 +243,16 @@ with tab3:
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
         with st.expander("🔍 Filters", expanded=False):
-            # Shortened Date Selection Row
-            st.markdown('<div class="filter-label">Date Range</div>', unsafe_allow_html=True)
-            dc1, dc2 = st.columns(2)
-            with dc1:
+            st.markdown('<div class="filter-section-header">Date Range</div>', unsafe_allow_html=True)
+            
+            # FORCED FLEX ROW for dates
+            st.markdown('<div class="force-row">', unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            with col1:
                 start_f = st.date_input("From", first_day, label_visibility="collapsed")
-            with dc2:
+            with col2:
                 end_f = st.date_input("To", last_day, label_visibility="collapsed")
+            st.markdown('</div>', unsafe_allow_html=True)
             
             # Categories
             with st.popover("Filter Categories", use_container_width=True):
@@ -286,7 +281,6 @@ with tab3:
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
-            amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
@@ -296,14 +290,13 @@ with tab3:
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
+                    <div class="tr-amt" style="color:{price_color};">{prefix}${row['Amount']:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.info("No data yet.")
+    else: st.info("No data yet.")
 
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
