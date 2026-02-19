@@ -9,19 +9,41 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Exact Measurements and Swipe Logic
+# --- INITIALIZE STATE ---
+if "active_tab" not in st.session_state:
+    st.session_state["active_tab"] = 0 # 0: Add Entry, 1: Visuals, 2: History
+
+# CSS: High-Contrast Layout & Custom Navigation Styling
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* LAYOUT SPACING - Streamlit Internal Block Gap: 0rem */
+    /* LAYOUT SPACING */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
-    /* --- TAB STYLING --- */
-    button[data-baseweb="tab"] p {
-        font-size: 1.35rem !important; 
-        font-weight: 800 !important;
+    /* --- CUSTOM TAB STYLING --- */
+    .nav-container {
+        display: flex;
+        justify-content: flex-start;
+        gap: 25px;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+        padding-bottom: 10px;
+        margin-bottom: 30px;
+    }
+    .nav-item {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: rgba(128, 128, 128, 0.6);
+        cursor: pointer;
+        padding: 5px 2px;
+        text-decoration: none;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s;
+    }
+    .nav-item-active {
+        color: #2e7d32 !important;
+        border-bottom: 3px solid #2e7d32 !important;
     }
     
     /* Ledger Header - No bottom line */
@@ -55,9 +77,7 @@ st.markdown("""
         height: 40px; 
         width: 100%;
         position: absolute;
-        top: 0; 
-        left: 0;
-        z-index: 1;
+        top: 0; left: 0; z-index: 1;
         pointer-events: none; 
         font-family: "Source Sans Pro", sans-serif;
         border: 1px solid rgba(128, 128, 128, 0.1);
@@ -68,16 +88,12 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. INVISIBLE CLICK BUTTON (.stButton button) Overlay */
+    /* 2. INVISIBLE CLICK BUTTON Overlay */
     .row-container div[data-testid="element-container"] {
         position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: 45px !important; 
-        z-index: 5 !important;
-        margin: 0 !important;
-        padding: 0 !important;
+        top: 0 !important; left: 0 !important;
+        width: 100% !important; height: 45px !important; 
+        z-index: 5 !important; margin: 0 !important; padding: 0 !important;
     }
 
     .row-container .stButton button {
@@ -86,10 +102,8 @@ st.markdown("""
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
-        width: 100% !important;
-        height: 45px !important; 
-        padding: 0px !important; 
-        margin: 0px !important;  
+        width: 100% !important; height: 45px !important; 
+        padding: 0px !important; margin: 0px !important;  
         display: block !important;
         cursor: pointer;
     }
@@ -98,63 +112,50 @@ st.markdown("""
         background-color: rgba(128,128,128,0.05) !important;
     }
     
-    /* Filter UI Tweaks */
-    div[data-testid="stPopover"] { 
-        width: 100%; 
-        margin-top: 15px !important; 
-        margin-bottom: 15px !important; 
-    }
+    /* General UI Tweaks */
+    div[data-testid="stPopover"] { width: 100%; margin-top: 15px !important; margin-bottom: 15px !important; }
     .stButton>button { border-radius: 12px; }
 
-    /* Decoy CSS for Focus Fix */
-    .decoy-focus {
-        height: 0; width: 0; opacity: 0; position: absolute; pointer-events: none;
-    }
+    /* Decoy for Focus Fix */
+    .decoy-focus { height: 0; width: 0; opacity: 0; position: absolute; pointer-events: none; }
     </style>
+    """, unsafe_allow_html=True)
 
-    <script>
-    // IMPROVED MOBILE SWIPE NAVIGATION
+# --- JAVASCRIPT: SWIPE ENGINE ---
+# Detects swipes and clicks invisible Streamlit buttons to change state
+st.components.v1.html("""
+<script>
     let touchstartX = 0;
     let touchendX = 0;
-    const minDistance = 100; // Increased distance for intent
+    const minDistance = 80;
 
     function handleSwipe() {
-        // Find tabs in the parent Streamlit window
-        const doc = window.parent.document;
-        const tabs = doc.querySelectorAll('button[data-baseweb="tab"]');
-        if (!tabs || tabs.length === 0) return;
-
-        let activeIdx = -1;
-        for (let i = 0; i < tabs.length; i++) {
-            if (tabs[i].getAttribute('aria-selected') === 'true') {
-                activeIdx = i;
-                break;
-            }
-        }
-
-        if (activeIdx === -1) return;
-
         if (touchendX < touchstartX - minDistance) {
-            // Swipe Left -> Next Tab
-            if (activeIdx < tabs.length - 1) tabs[activeIdx + 1].click();
+            window.parent.document.querySelector('button[key="next_tab"]').click();
         }
         if (touchendX > touchstartX + minDistance) {
-            // Swipe Right -> Previous Tab
-            if (activeIdx > 0) tabs[activeIdx - 1].click();
+            window.parent.document.querySelector('button[key="prev_tab"]').click();
         }
     }
 
-    // Attach listeners to the parent body to ensure swipe works anywhere
-    window.parent.document.body.addEventListener('touchstart', e => {
+    window.parent.document.addEventListener('touchstart', e => {
         touchstartX = e.changedTouches[0].screenX;
     }, {passive: true});
 
-    window.parent.document.body.addEventListener('touchend', e => {
+    window.parent.document.addEventListener('touchend', e => {
         touchendX = e.changedTouches[0].screenX;
         handleSwipe();
     }, {passive: true});
-    </script>
-    """, unsafe_allow_html=True)
+</script>
+""", height=0)
+
+# Hidden triggers for the JS engine
+if st.button("next", key="next_tab", help="hidden"):
+    st.session_state.active_tab = min(st.session_state.active_tab + 1, 2)
+    st.rerun()
+if st.button("prev", key="prev_tab", help="hidden"):
+    st.session_state.active_tab = max(st.session_state.active_tab - 1, 0)
+    st.rerun()
 
 # --- AUTHENTICATION ---
 USERS = {"ethan": "petersen1", "alesa": "petersen2"}
@@ -210,8 +211,7 @@ def load_data_clean():
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"])
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
-        else:
-            c_df = pd.DataFrame(columns=["Type", "Name"])
+        else: c_df = pd.DataFrame(columns=["Type", "Name"])
         return t_df, c_df
     except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name"])
 
@@ -276,9 +276,28 @@ def manage_cat_dialog(old_name, cat_type):
 # --- MAIN APP ---
 st.title("📊 Petersen Budget")
 st.markdown('<div style="margin-bottom: 40px;"></div>', unsafe_allow_html=True)
-tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
-with tab1:
+# --- CUSTOM NAVIGATION BAR ---
+cols = st.columns([1,1,1,2])
+with cols[0]:
+    if st.button("Add Entry", type="secondary", use_container_width=True): st.session_state.active_tab = 0; st.rerun()
+with cols[1]:
+    if st.button("Visuals", type="secondary", use_container_width=True): st.session_state.active_tab = 1; st.rerun()
+with cols[2]:
+    if st.button("History", type="secondary", use_container_width=True): st.session_state.active_tab = 2; st.rerun()
+
+# Visual Indicator for Active Tab
+active_label = ["Add Entry", "Visuals", "History"][st.session_state.active_tab]
+st.markdown(f"""
+    <div style="margin-top: -15px; margin-bottom: 25px;">
+        <span style="color: #2e7d32; font-weight: 800; border-bottom: 3px solid #2e7d32; padding-bottom: 5px;">
+            {active_label} View
+        </span>
+    </div>
+""", unsafe_allow_html=True)
+
+# --- CONTENT SECTIONS ---
+if st.session_state.active_tab == 0:
     st.subheader("Add Transaction")
     t_type = st.radio("Type", ["Expense", "Income"], horizontal=True)
     with st.form("entry_form", clear_on_submit=True):
@@ -295,10 +314,8 @@ with tab1:
                 updated = pd.concat([latest_t, new_entry], ignore_index=True)
                 updated['Date'] = updated['Date'].dt.strftime('%Y-%m-%d')
                 conn.update(worksheet="transactions", data=updated); st.success("Saved!"); time.sleep(1); st.rerun()
-            elif f_amt is None: st.error("Enter amount.")
-            else: st.error("Add category first.")
 
-with tab2:
+elif st.session_state.active_tab == 1:
     if not df_t.empty:
         viz_df = df_t.copy()
         viz_df["Memo"] = viz_df["Memo"].apply(lambda x: "Unspecified" if str(x).lower() == "nan" or str(x).strip() == "" else str(x))
@@ -312,7 +329,7 @@ with tab2:
             if not di.empty: st.plotly_chart(px.sunburst(di, path=['Category', 'Memo'], values='Amount', title="Income"), use_container_width=True)
     else: st.info("No data yet.")
 
-with tab3:
+elif st.session_state.active_tab == 2:
     if not df_t.empty:
         today = date.today(); first_day = today.replace(day=1)
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
@@ -324,7 +341,6 @@ with tab3:
                 sel_cats = [cat for cat in all_cats if st.checkbox(cat, value=True, key=f"f_{cat}")]
             work_df = df_t.copy()
             work_df = work_df[(work_df["Date"].dt.date >= start_f) & (work_df["Date"].dt.date <= end_f) & (work_df["Category"].isin(sel_cats))]
-            st.markdown(f"**Filtered Net:** `${(work_df[work_df['Type'] == 'Income']['Amount'].sum() - work_df[work_df['Type'] == 'Expense']['Amount'].sum()):,.2f}`")
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
@@ -339,16 +355,12 @@ with tab3:
 
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
-    
-    # Sidebar spacing requested for Hi Ethan section
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     if st.button("🔄 Force Sync", use_container_width=True):
         st.cache_resource.clear(); st.cache_data.clear(); st.rerun()
-    
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     if st.button("Logout", use_container_width=True):
         st.session_state["authenticated"] = False; st.query_params.clear(); st.rerun()
-    
     st.divider()
     st.header("Categories")
     with st.form("cat_form", clear_on_submit=True):
@@ -359,7 +371,6 @@ with st.sidebar:
                 st.cache_resource.clear(); _, latest_c = load_data_clean()
                 updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c); st.success("Added!"); time.sleep(0.5); st.rerun()
-    
     st.markdown('<div style="height: 20px;"></div>', unsafe_allow_html=True)
     st.header("Manage Existing Category")
     with st.container(border=True):
