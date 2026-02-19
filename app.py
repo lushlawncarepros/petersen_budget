@@ -92,24 +92,7 @@ if not st.session_state["authenticated"]:
 # --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def safe_float(val):
-    """
-    The Crash-Proof Converter.
-    If it's a number, return it.
-    If it's a string, clean it then return it.
-    If it's junk, return 0.0.
-    """
-    try:
-        if isinstance(val, (int, float)):
-            return float(val)
-        if isinstance(val, str):
-            clean = val.replace('$', '').replace(',', '').strip()
-            return float(clean) if clean else 0.0
-        return 0.0
-    except:
-        return 0.0
-
-def load_data_robust():
+def load_data_simple():
     st.cache_data.clear()
     try:
         # Read standard
@@ -118,17 +101,17 @@ def load_data_robust():
         
         # --- CLEAN TRANSACTIONS ---
         if t_df is not None and not t_df.empty:
+            # Normalize Headers
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             
             # Ensure columns exist
             for col in ["Date", "Type", "Category", "Amount", "User"]:
                 if col not in t_df.columns: t_df[col] = ""
 
-            # FIX: Use apply(safe_float) instead of vector string ops
-            # This handles Mixed Types (Numbers AND Strings) gracefully
-            t_df["Amount"] = t_df["Amount"].apply(safe_float)
+            # NO TEXT CLEANING - Just direct conversion
+            t_df["Amount"] = pd.to_numeric(t_df["Amount"], errors='coerce').fillna(0)
             
-            # Date Handling
+            # Date Handling (Kept this fix)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date'])
             t_df = t_df.reset_index(drop=True)
@@ -145,7 +128,7 @@ def load_data_robust():
     except Exception:
         return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
 
-df_t, df_c = load_data_robust()
+df_t, df_c = load_data_simple()
 
 def get_cat_list(t_filter):
     if df_c.empty or "Name" not in df_c.columns: return []
@@ -167,6 +150,7 @@ def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
     clist = get_cat_list(row_data["Type"])
+    # Safe Indexing
     try:
         c_idx = clist.index(row_data["Category"])
     except ValueError:
@@ -211,7 +195,7 @@ with tab1:
         f_amt = st.number_input("Amount ($)", min_value=0.0, step=0.01)
         if st.form_submit_button("Save"):
             if f_clist:
-                latest_t, _ = load_data_robust()
+                latest_t, _ = load_data_simple()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date),
                     "Type": t_type,
@@ -245,6 +229,7 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
+        # Sort
         work_df = df_t.copy()
         work_df['sort_date'] = pd.to_datetime(work_df['Date'])
         work_df = work_df.sort_values(by="sort_date", ascending=False)
@@ -265,7 +250,7 @@ with tab3:
             amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             
-            # 1. TEXT COLORS
+            # Colors
             if is_ex:
                 prefix = "-"
                 amt_color = "#d32f2f" # Red
@@ -275,7 +260,7 @@ with tab3:
                 
             amt_display = f"{prefix}${amt_val:,.0f}"
             
-            # 2. VISUAL CARD (White Background)
+            # 1. VISUAL CARD (White Background)
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
@@ -284,7 +269,7 @@ with tab3:
                 </div>
             """, unsafe_allow_html=True)
             
-            # 3. CLICK OVERLAY
+            # 2. CLICK OVERLAY
             st.markdown('<div class="row-overlay">', unsafe_allow_html=True)
             if st.button(f"btn_{i}", key=f"h_{i}", label_visibility="hidden"):
                 edit_dialog(i, row)
@@ -312,7 +297,7 @@ with st.sidebar:
         if st.form_submit_button("Add Category"):
             if cn:
                 st.cache_resource.clear()
-                _, latest_c = load_data_robust()
+                _, latest_c = load_data_simple()
                 updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c)
                 st.success("Added!")
