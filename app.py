@@ -9,19 +9,19 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: The "Mobile Force" Layout with Scaling Fixes
+# CSS: High-Precision Mobile Layout
 st.markdown("""
     <style>
-    /* 1. GLOBAL UI TWEAKS */
+    /* 1. GLOBAL & BLOCK TWEAKS */
     div[data-testid="stSidebarNav"] { display: none; }
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    .stButton>button { border-radius: 12px; }
+    .stButton>button { border-radius: 10px; }
 
-    /* 2. HISTORY LEDGER STYLING */
+    /* 2. TIGHTER HISTORY LEDGER */
     .row-container {
         position: relative; 
-        height: 60px; 
-        margin-bottom: 2px;
+        height: 48px; /* Tightened from 60px */
+        margin-bottom: 1px; /* Minimal gap */
         width: 100%;
     }
     .trans-row {
@@ -29,9 +29,9 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         background-color: white;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid #f0f0f0;
         padding: 0 10px;
-        height: 60px;
+        height: 48px;
         width: 100%;
         position: absolute;
         top: 0;
@@ -39,55 +39,52 @@ st.markdown("""
         z-index: 1;
         pointer-events: none;
     }
-    .tr-date { width: 20%; font-size: 0.85rem; color: #000; font-weight: 800; }
-    .tr-cat { width: 50%; font-size: 0.95rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 900; text-align: right; }
+    .tr-date { width: 20%; font-size: 0.8rem; color: #000; font-weight: 800; }
+    .tr-cat { width: 50%; font-size: 0.85rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 0.95rem; font-weight: 900; text-align: right; }
     
-    .row-container .stButton { position: absolute; top: 0; left: 0; width: 100%; height: 60px; z-index: 5; }
+    .row-container .stButton { position: absolute; top: 0; left: 0; width: 100%; height: 48px; z-index: 5; }
     .row-container .stButton button {
         background-color: transparent !important;
         color: transparent !important;
         border: none !important;
         width: 100% !important;
-        height: 60px !important;
+        height: 48px !important;
         cursor: pointer;
     }
 
-    /* 3. FILTER UI: FORCE SIDE-BY-SIDE & SHRINK TO FIT */
-    /* Target the container that holds st.columns */
+    /* 3. FILTER UI: NO-SCROLL FORCED ROW */
     [data-testid="stHorizontalBlock"] {
         flex-direction: row !important;
         display: flex !important;
         flex-wrap: nowrap !important;
-        gap: 8px !important;
-        margin-bottom: 12px !important;
         width: 100% !important;
+        gap: 6px !important;
+        margin-bottom: 10px !important;
     }
 
-    /* Target the individual columns to shrink properly */
     [data-testid="column"] {
-        min-width: 0 !important; /* Critical for shrinking */
-        flex: 1 1 auto !important;
-        width: auto !important;
+        width: 50% !important;
+        flex: 1 1 50% !important;
+        min-width: 0 !important; /* Forces shrink to fit screen */
     }
 
-    /* Make the date boxes shorter and fit text */
+    /* Input Box Adjustments */
     div[data-testid="stDateInput"] label { display: none !important; }
     div[data-testid="stDateInput"] > div { 
-        height: 40px !important; 
-        min-height: 40px !important;
+        height: 38px !important; 
+        min-height: 38px !important;
     }
     div[data-testid="stDateInput"] input {
-        font-size: 0.8rem !important; /* Smaller font to fit on mobile */
-        padding: 0 5px !important;
+        font-size: 0.75rem !important; /* Smaller text to prevent overflow */
+        padding: 0 4px !important;
     }
 
-    .filter-group-label {
+    .filter-label-top {
         font-size: 0.7rem;
         font-weight: 800;
-        color: #777;
-        margin-bottom: 8px; /* Added space to prevent overlap */
-        margin-top: 5px;
+        color: #888;
+        margin: 10px 0 5px 0; /* Ensures it doesn't get covered */
         text-transform: uppercase;
         display: block;
     }
@@ -96,17 +93,17 @@ st.markdown("""
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 10px;
+        padding: 8px 10px;
         border-bottom: 2px solid #333;
         color: #444;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 800;
         text-transform: uppercase;
     }
 
-    /* Category Popover Spacing */
-    div[data-testid="stPopover"] { width: 100%; margin-top: 8px; }
-    div[data-testid="stCheckbox"] { margin-bottom: 8px !important; }
+    /* Popover Scaling */
+    div[data-testid="stPopover"] { width: 100%; margin-top: 5px; }
+    div[data-testid="stCheckbox"] { margin-bottom: 6px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -250,16 +247,16 @@ with tab3:
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
         with st.expander("🔍 Filter History", expanded=False):
-            st.markdown('<div class="filter-group-label">Date Range</div>', unsafe_allow_html=True)
+            st.markdown('<div class="filter-label-top">Date Range</div>', unsafe_allow_html=True)
             
-            # Forced row via CSS [data-testid="stHorizontalBlock"]
+            # Forced side-by-side without horizontal overflow
             col1, col2 = st.columns(2)
             with col1:
                 start_f = st.date_input("From", first_day, label_visibility="collapsed")
             with col2:
                 end_f = st.date_input("To", last_day, label_visibility="collapsed")
             
-            # Categories Popover
+            # Categories
             with st.popover("Filter Categories", use_container_width=True):
                 st.markdown("**Income**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
@@ -277,8 +274,9 @@ with tab3:
                 (work_df["Category"].isin(all_selected))
             ]
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.caption(f"Net for selection: **${f_net:,.2f}**")
+            st.caption(f"Net: **${f_net:,.2f}** ({len(work_df)} tx)")
 
+        # Ledger List
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
@@ -286,6 +284,7 @@ with tab3:
             if pd.isnull(row['Date']): continue
             d_str = row['Date'].strftime('%m/%d')
             is_ex = row['Type'] == 'Expense'
+            amt_val = row['Amount']
             icon = get_icon(row['Category'], row['Type'])
             price_color = "#d32f2f" if is_ex else "#2e7d32" 
             prefix = "-" if is_ex else "+"
@@ -295,7 +294,7 @@ with tab3:
                 <div class="trans-row">
                     <div class="tr-date">{d_str}</div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
-                    <div class="tr-amt" style="color:{price_color};">{prefix}${row['Amount']:,.0f}</div>
+                    <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
@@ -313,11 +312,11 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
     st.divider()
-    st.header("Manage Categories")
+    st.header("Categories")
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
-        cn = st.text_input("New Category Name")
-        if st.form_submit_button("Add Category"):
+        cn = st.text_input("New Name")
+        if st.form_submit_button("Add"):
             if cn:
                 st.cache_resource.clear()
                 _, latest_c = load_data_clean()
@@ -326,4 +325,3 @@ with st.sidebar:
                 st.success("Added!")
                 time.sleep(0.5)
                 st.rerun()
-
