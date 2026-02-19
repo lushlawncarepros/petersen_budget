@@ -24,10 +24,10 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. LAYOUT SPACING - Row Container Height changed to 30px; margin-bottom: 0px */
+    /* 3. LAYOUT SPACING - Row Container Height changed to 25px; margin-bottom: 0px */
     .row-container {
         position: relative; 
-        height: 30px; /* Changed from 40px to 30px */
+        height: 25px; /* Changed from 30px to 25px */
         margin-bottom: 0px; 
         width: 100%;
         background-color: transparent; 
