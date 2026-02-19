@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Fixed Filter & Ledger Spacing
+# CSS: High-Contrast Layout with Custom Checkbox Colors and Header Delineation
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -22,7 +22,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 60px; 
-        margin-bottom: 2px; /* Restored to "Nailed It" spacing */
+        margin-bottom: 2px;
         width: 100%;
         background-color: white; 
     }
@@ -71,12 +71,16 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Ledger Header */
+    .row-container .stButton button:hover {
+        background-color: rgba(0,0,0,0.03) !important;
+    }
+    
+    /* Ledger Header - Bold Black Line below header */
     .hist-header {
         display: flex;
         justify-content: space-between;
         padding: 10px;
-        border-bottom: 2px solid #333;
+        border-bottom: 3px solid #000; /* Bold Black Line */
         color: #444;
         font-size: 0.75rem;
         font-weight: 800;
@@ -84,21 +88,30 @@ st.markdown("""
         background-color: white;
     }
 
-    /* --- FILTER UI SPACING --- */
+    /* --- FILTER UI SPACING & COLORS --- */
     
-    /* Spacing for the Filter Categories Button */
     div[data-testid="stPopover"] { 
         width: 100%; 
-        margin-top: 25px !important; /* Pushes it down from the dates */
+        margin-top: 25px !important; 
     }
     
-    /* Spacing for checkboxes inside the popover */
     div[data-testid="stCheckbox"] { 
         margin-bottom: 12px !important; 
         padding-top: 5px !important;
     }
     
-    /* Formatting for standard buttons */
+    /* Income Checkboxes - Green when checked */
+    .income-filter-section div[data-testid="stCheckbox"] input:checked ~ div {
+        background-color: #2e7d32 !important;
+        border-color: #2e7d32 !important;
+    }
+    
+    /* Expense Checkboxes - Red when checked */
+    .expense-filter-section div[data-testid="stCheckbox"] input:checked ~ div {
+        background-color: #d32f2f !important;
+        border-color: #d32f2f !important;
+    }
+
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -252,14 +265,21 @@ with tab3:
                 end_f = st.date_input("To", last_day)
             
             with st.popover("Select Categories"):
+                # Wrapper div to turn these checkboxes green
+                st.markdown('<div class="income-filter-section">', unsafe_allow_html=True)
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
                 sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"filter_inc_{cat}")]
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 st.divider()
+                
+                # Wrapper div to turn these checkboxes red
+                st.markdown('<div class="expense-filter-section">', unsafe_allow_html=True)
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"filter_exp_{cat}")]
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 all_selected = sel_inc + sel_exp
 
@@ -276,7 +296,7 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
-        # Wrapped in a white container to ensure background doesn't peek through the 2px margins
+        # Wrapped in a white container to ensure background consistency
         st.markdown('<div style="background-color:white; width:100%;">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
