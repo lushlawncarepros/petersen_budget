@@ -20,7 +20,7 @@ st.markdown("""
     
     /* --- TAB STYLING --- */
     button[data-baseweb="tab"] p {
-        font-size: 1.35rem !important; 
+        font-size: 1.15rem !important; /* Scaled slightly to fit 4 tabs nicely */
         font-weight: 800 !important;
     }
     
@@ -149,6 +149,8 @@ def load_data_clean():
     try:
         t_df = conn.read(worksheet="transactions", ttl=0)
         c_df = conn.read(worksheet="categories", ttl=0)
+        
+        # Transactions Clean
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
             for col in ["Date", "Type", "Category", "Amount", "User", "Memo"]:
@@ -157,14 +159,29 @@ def load_data_clean():
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"])
+        
+        # Categories Clean
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
             c_df = pd.DataFrame(columns=["Type", "Name"])
-        return t_df, c_df
-    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name"])
+            
+        # Budgets Clean
+        try:
+            b_df = conn.read(worksheet="budgets", ttl=0)
+            if b_df is not None and not b_df.empty:
+                b_df.columns = [str(c).strip().title() for c in b_df.columns]
+                for col in ["Month", "Category", "Amount"]:
+                    if col not in b_df.columns: b_df[col] = ""
+                b_df["Amount"] = b_df["Amount"].apply(safe_float)
+                b_df["Month"] = b_df["Month"].astype(str)
+            else: b_df = pd.DataFrame(columns=["Month", "Category", "Amount"])
+        except: b_df = pd.DataFrame(columns=["Month", "Category", "Amount"])
+            
+        return t_df, c_df, b_df
+    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name"]), pd.DataFrame(columns=["Month", "Category", "Amount"])
 
-df_t, df_c = load_data_clean()
+df_t, df_c, df_b = load_data_clean()
 
 def get_icon(cat_name, row_type):
     n = str(cat_name).lower()
@@ -219,19 +236,31 @@ def manage_cat_dialog(old_name, cat_type):
     new_type = st.selectbox("Designation", ["Expense", "Income"], index=0 if cat_type == "Expense" else 1)
     new_name = st.text_input("Category Name", value=old_name)
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+    
     c1, c2 = st.columns(2)
     with c1:
         if st.button("💾 Save Changes", use_container_width=True):
             if new_name and (new_name != old_name or new_type != cat_type):
+                # 1. Update Category List
                 mask_c = (df_c["Type"] == cat_type) & (df_c["Name"] == old_name)
                 df_c.loc[mask_c, "Name"] = new_name
                 df_c.loc[mask_c, "Type"] = new_type
                 conn.update(worksheet="categories", data=df_c)
+                
+                # 2. Sync existing transactions
                 mask_t = (df_t["Category"] == old_name)
                 df_t.loc[mask_t, "Category"] = new_name
                 df_t.loc[mask_t, "Type"] = new_type
                 df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
                 conn.update(worksheet="transactions", data=df_t)
+                
+                # 3. Sync existing budget planners
+                if not df_b.empty:
+                    mask_b = (df_b["Category"] == old_name)
+                    if mask_b.any():
+                        df_b.loc[mask_b, "Category"] = new_name
+                        conn.update(worksheet="budgets", data=df_b)
+
                 st.success("Updated everywhere!")
                 time.sleep(1)
                 st.rerun()
@@ -240,6 +269,11 @@ def manage_cat_dialog(old_name, cat_type):
         if st.button("🗑️ Delete", use_container_width=True):
             new_c = df_c[~((df_c["Type"] == cat_type) & (df_c["Name"] == old_name))]
             conn.update(worksheet="categories", data=new_c)
+            
+            if not df_b.empty:
+                new_b = df_b[df_b["Category"] != old_name]
+                conn.update(worksheet="budgets", data=new_b)
+                
             st.success("Category Removed!")
             time.sleep(1)
             st.rerun()
@@ -248,8 +282,8 @@ def manage_cat_dialog(old_name, cat_type):
 st.title("📊 Petersen Budget")
 st.markdown('<div style="margin-bottom: 40px;"></div>', unsafe_allow_html=True)
 
-# Reverting to standard tabs for reliability
-tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
+# Added Budget Tab
+tab1, tab_budget, tab2, tab3 = st.tabs(["Add Entry", "Budget", "Visuals", "History"])
 
 with tab1:
     st.subheader("Add Transaction")
@@ -263,7 +297,7 @@ with tab1:
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
         if st.form_submit_button("Save", use_container_width=True):
             if f_cats and f_amt is not None:
-                latest_t, _ = load_data_clean()
+                latest_t, _, _ = load_data_clean()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date), "Type": t_type, "Category": f_cat,
                     "Amount": float(f_amt), "User": st.session_state["user"],
@@ -278,13 +312,99 @@ with tab1:
             elif f_amt is None: st.error("Please enter an amount.")
             else: st.error("Please add a category first!")
 
+# --- BUDGET TAB (Profit & Loss Style) ---
+with tab_budget:
+    st.subheader("Monthly Budget Planner")
+    
+    # Month/Year Selector
+    now = datetime.now()
+    years = list(range(2023, 2035))
+    months = list(calendar.month_name)[1:]
+    
+    c1, c2 = st.columns(2)
+    selected_month = c1.selectbox("Month", months, index=now.month - 1)
+    selected_year = c2.selectbox("Year", years, index=years.index(now.year))
+    
+    month_num = months.index(selected_month) + 1
+    month_str = f"{selected_year}-{month_num:02d}"
+    
+    # Calculate Actuals for the selected month
+    t_month = df_t[(df_t['Date'].dt.year == selected_year) & (df_t['Date'].dt.month == month_num)]
+    actuals = t_month.groupby('Category')['Amount'].sum().to_dict()
+    
+    # Load Planned for the selected month
+    b_month = df_b[df_b['Month'] == month_str] if not df_b.empty else pd.DataFrame(columns=["Month", "Category", "Amount"])
+    planned = b_month.set_index('Category')['Amount'].to_dict() if not b_month.empty else {}
+    
+    # Function to build DataFrame for data_editor
+    def build_budget_df(cat_type):
+        cats = sorted(df_c[df_c["Type"] == cat_type]["Name"].unique().tolist(), key=str.lower)
+        data = []
+        for c in cats:
+            p = float(planned.get(c, 0.0))
+            a = float(actuals.get(c, 0.0))
+            diff = float(a - p) if cat_type == "Income" else float(p - a)
+            data.append({"Category": c, "Planned": p, "Actual": a, "Diff": diff})
+        return pd.DataFrame(data)
+
+    inc_b_df = build_budget_df("Income")
+    exp_b_df = build_budget_df("Expense")
+    
+    # Calculate Totals
+    tot_inc_p = inc_b_df["Planned"].sum() if not inc_b_df.empty else 0
+    tot_inc_a = inc_b_df["Actual"].sum() if not inc_b_df.empty else 0
+    tot_exp_p = exp_b_df["Planned"].sum() if not exp_b_df.empty else 0
+    tot_exp_a = exp_b_df["Actual"].sum() if not exp_b_df.empty else 0
+    
+    st.markdown("### Net Balance")
+    nc1, nc2, nc3 = st.columns(3)
+    nc1.metric("Planned Net", f"${tot_inc_p - tot_exp_p:,.0f}")
+    nc2.metric("Actual Net", f"${tot_inc_a - tot_exp_a:,.0f}")
+    nc3.metric("Variance", f"${(tot_inc_a - tot_exp_a) - (tot_inc_p - tot_exp_p):,.0f}")
+    
+    # Data Editors (Profit & Loss layout)
+    col_config = {
+        "Category": st.column_config.TextColumn("Category", disabled=True),
+        "Planned": st.column_config.NumberColumn("Planned ($)", format="%.2f", step=1),
+        "Actual": st.column_config.NumberColumn("Actual ($)", format="%.2f", disabled=True),
+        "Diff": st.column_config.NumberColumn("Diff", format="%.2f", disabled=True)
+    }
+
+    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+    st.markdown("**💰 INCOME**")
+    ed_inc = st.data_editor(inc_b_df, hide_index=True, column_config=col_config, use_container_width=True, key=f"inc_{month_str}")
+    
+    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+    st.markdown("**💸 EXPENSES**")
+    ed_exp = st.data_editor(exp_b_df, hide_index=True, column_config=col_config, use_container_width=True, key=f"exp_{month_str}")
+
+    st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
+    if st.button("💾 Save Budget Planner", use_container_width=True):
+        new_b = []
+        if not ed_inc.empty:
+            for _, r in ed_inc.iterrows(): new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
+        if not ed_exp.empty:
+            for _, r in ed_exp.iterrows(): new_b.append({"Month": month_str, "Category": r["Category"], "Amount": r["Planned"]})
+        new_b_df = pd.DataFrame(new_b)
+        
+        if df_b.empty:
+            updated_b = new_b_df
+        else:
+            latest_b = df_b[df_b["Month"] != month_str]
+            updated_b = pd.concat([latest_b, new_b_df], ignore_index=True)
+            
+        conn.update(worksheet="budgets", data=updated_b)
+        st.success(f"Budget saved for {selected_month} {selected_year}!")
+        time.sleep(1)
+        st.rerun()
+
 with tab2:
     if not df_t.empty:
         viz_df = df_t.copy()
         viz_df["Memo"] = viz_df["Memo"].apply(lambda x: "Unspecified" if str(x).lower() == "nan" or str(x).strip() == "" else str(x))
         inc_val = viz_df[viz_df["Type"] == "Income"]["Amount"].sum()
         exp_val = viz_df[viz_df["Type"] == "Expense"]["Amount"].sum()
-        st.metric("Net Balance", f"${(inc_val - exp_val):,.2f}", delta=f"${inc_val:,.2f} In")
+        st.metric("All-Time Net Balance", f"${(inc_val - exp_val):,.2f}", delta=f"${inc_val:,.2f} In")
         c1, c2 = st.columns(2)
         with c1:
             dx = viz_df[viz_df["Type"] == "Expense"]
@@ -362,7 +482,7 @@ with st.sidebar:
         if st.form_submit_button("Add Category", use_container_width=True):
             if cn:
                 st.cache_resource.clear()
-                _, latest_c = load_data_clean()
+                _, latest_c, _ = load_data_clean()
                 updated_c = pd.concat([latest_c, pd.DataFrame([{"Type": ct, "Name": cn}])], ignore_index=True)
                 conn.update(worksheet="categories", data=updated_c)
                 st.success("Added!")
