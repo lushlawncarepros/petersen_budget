@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Vertical Alignment Fixes and Large Tabs
+# CSS: High-Contrast Layout with Dynamic Tabs and Vertical Alignment
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -19,11 +19,11 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* --- TAB STYLING --- */
-    /* Target the tab labels to double size and bold */
+    /* Target the tab labels: dynamic color for dark mode & 25% size reduction */
     button[data-baseweb="tab"] p {
-        font-size: 1.8rem !important;
+        font-size: 1.35rem !important; /* Reduced from 1.8rem */
         font-weight: 800 !important;
-        color: #111 !important;
+        color: var(--text-color) !important; /* Dynamic: White in dark mode, Black in light */
     }
     
     /* THE ROW CONTAINER */
@@ -42,7 +42,7 @@ st.markdown("""
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        /* 20px bottom padding to shift text up for perfect vertical balance on S25 */
+        /* 20px bottom padding for perfect vertical balance on mobile */
         padding: 0 12px 20px 12px; 
         height: 60px;
         width: 100%;
@@ -81,11 +81,7 @@ st.markdown("""
         cursor: pointer;
     }
     
-    .row-container .stButton button:hover {
-        background-color: rgba(0,0,0,0.03) !important;
-    }
-    
-    /* Ledger Header - Refined Size */
+    /* Ledger Header Styling */
     .hist-header {
         display: flex;
         justify-content: space-between;
