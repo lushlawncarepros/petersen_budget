@@ -262,7 +262,7 @@ def edit_dialog(row_index, row_data):
     memo_val = "" if raw_memo.lower() == "nan" else raw_memo
     e_memo = st.text_input("Memo", value=memo_val)
     
-    e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
+    e_amt = st.number_input("Amount ($)", value=int(float(row_data["Amount"])), step=1)
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -351,14 +351,14 @@ with tab1:
         
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
         f_memo = st.text_input("Memo", placeholder="Optional details")
-        f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
+        f_amt = st.number_input("Amount ($)", value=None, placeholder="0", step=1)
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
         if st.form_submit_button("Save", use_container_width=True):
             if f_cats and f_amt is not None:
                 latest_t, _, _ = load_data_clean()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date), "Type": t_type, "Category": f_cat,
-                    "Amount": float(f_amt), "User": st.session_state["user"],
+                    "Amount": int(f_amt), "User": st.session_state["user"],
                     "Memo": f_memo
                 }])
                 updated = pd.concat([latest_t, new_entry], ignore_index=True)
@@ -418,9 +418,9 @@ with tab_budget:
     col_config = {
         "Order": st.column_config.NumberColumn("Sort", step=1, help="Lower numbers appear first"),
         "Category": st.column_config.TextColumn("Category", disabled=True),
-        "Planned": st.column_config.NumberColumn("Planned ($)", format="%.2f", step=1),
-        "Actual": st.column_config.NumberColumn("Actual ($)", format="%.2f", disabled=True),
-        "Diff": st.column_config.NumberColumn("Diff", format="%.2f", disabled=True)
+        "Planned": st.column_config.NumberColumn("Planned ($)", format="%d", step=1),
+        "Actual": st.column_config.NumberColumn("Actual ($)", format="%d", disabled=True),
+        "Diff": st.column_config.NumberColumn("Diff", format="%d", disabled=True)
     }
 
     all_budget_edits = []
@@ -583,7 +583,7 @@ with tab2:
         viz_df["Memo"] = viz_df["Memo"].apply(lambda x: "Unspecified" if str(x).lower() == "nan" or str(x).strip() == "" else str(x))
         inc_val = viz_df[viz_df["Type"] == "Income"]["Amount"].sum()
         exp_val = viz_df[viz_df["Type"] == "Expense"]["Amount"].sum()
-        st.metric("All-Time Net Balance", f"${(inc_val - exp_val):,.2f}", delta=f"${inc_val:,.2f} In")
+        st.metric("All-Time Net Balance", f"${(inc_val - exp_val):,.0f}", delta=f"${inc_val:,.0f} In")
         c1, c2 = st.columns(2)
         with c1:
             dx = viz_df[viz_df["Type"] == "Expense"]
@@ -621,7 +621,7 @@ with tab3:
             work_df = df_t.copy()
             work_df = work_df[(work_df["Date"].dt.date >= start_f) & (work_df["Date"].dt.date <= end_f) & (work_df["Category"].isin(all_selected))]
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.markdown(f"**Filtered Net:** `${f_net:,.2f}`")
+            st.markdown(f"**Filtered Net:** `${f_net:,.0f}`")
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
