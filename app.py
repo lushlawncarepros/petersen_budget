@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Refined Mobile List with Grid Overlay
+# CSS: Refined Mobile List with Grid Overlay and Perfect Vertical Centering
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -22,7 +22,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 60px; 
-        margin-bottom: 2px; /* Restored to "Nailed It" spacing */
+        margin-bottom: 2px;
         width: 100%;
         background-color: white; 
     }
@@ -30,11 +30,11 @@ st.markdown("""
     /* 1. VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
-        align-items: center; 
+        align-items: center; /* Vertical Center */
         justify-content: space-between;
         background-color: white;
         border-bottom: 1px solid #f0f0f0;
-        padding: 0 12px;
+        padding: 0 12px; /* Horizontal padding only */
         height: 60px;
         width: 100%;
         position: absolute;
@@ -43,11 +43,43 @@ st.markdown("""
         z-index: 1;
         pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
+        
+        /* KEY FIX FOR CENTERING: Match line-height to box height */
+        line-height: 60px !important; 
+        overflow: hidden;
     }
     
-    .tr-date { width: 20%; font-size: 0.85rem; color: #111; font-weight: 700; }
-    .tr-cat { width: 50%; font-size: 0.95rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
+    .tr-date { 
+        width: 20%; 
+        font-size: 0.85rem; 
+        color: #111; 
+        font-weight: 700;
+        height: 60px;
+        display: flex;
+        align-items: center;
+    }
+    .tr-cat { 
+        width: 50%; 
+        font-size: 0.95rem; 
+        color: #222; 
+        font-weight: 600; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        height: 60px;
+        display: flex;
+        align-items: center;
+    }
+    .tr-amt { 
+        width: 30%; 
+        font-size: 1.05rem; 
+        font-weight: 800; 
+        text-align: right; 
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+    }
     
     /* 2. CLICK LAYER (Button Overlay) */
     .row-container .stButton {
@@ -85,20 +117,16 @@ st.markdown("""
     }
 
     /* --- FILTER UI SPACING --- */
-    
-    /* Spacing for the Filter Categories Button */
     div[data-testid="stPopover"] { 
         width: 100%; 
-        margin-top: 25px !important; /* Pushes it down from the dates */
+        margin-top: 25px !important;
     }
     
-    /* Spacing for checkboxes inside the popover */
     div[data-testid="stCheckbox"] { 
         margin-bottom: 12px !important; 
         padding-top: 5px !important;
     }
     
-    /* Formatting for standard buttons */
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -240,13 +268,12 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # 1. CALCULATE DEFAULT DATE RANGE (Full Current Month)
         today = date.today()
         first_day = today.replace(day=1)
         last_day_num = calendar.monthrange(today.year, today.month)[1]
         last_day = today.replace(day=last_day_num)
 
-        with st.expander("🔍 Filter History", expanded=False):
+        with st.expander("🔍 Filter View"):
             c1, c2 = st.columns(2)
             with c1:
                 start_f = st.date_input("From", first_day)
@@ -257,12 +284,10 @@ with tab3:
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
                 sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"filter_inc_{cat}")]
-                
                 st.divider()
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"filter_exp_{cat}")]
-                
                 all_selected = sel_inc + sel_exp
 
             work_df = df_t.copy()
@@ -271,14 +296,12 @@ with tab3:
                 (work_df["Date"].dt.date <= end_f) & 
                 (work_df["Category"].isin(all_selected))
             ]
-            
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
             st.markdown(f"**Filtered Net:** `${f_net:,.2f}`")
 
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
-        # Wrapped in a white container to ensure background doesn't peek through the 2px margins
         st.markdown('<div style="background-color:white; width:100%;">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
@@ -292,7 +315,7 @@ with tab3:
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
             st.markdown(f"""
                 <div class="trans-row">
-                    <div class="tr-date">{d_str}</div>
+                    <div class="tr-date"><span>{d_str}</span></div>
                     <div class="tr-cat">{icon} {row['Category']}</div>
                     <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
