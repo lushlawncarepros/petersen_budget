@@ -9,13 +9,13 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Refined Mobile List with Grid Overlay
+# CSS: Refined Mobile Layout & Spacing Fixes
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* Remove vertical gaps between rows */
+    /* Remove vertical gaps between rows in History list */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
     
     /* THE ROW CONTAINER */
@@ -40,15 +40,15 @@ st.markdown("""
         top: 0;
         left: 0;
         z-index: 1;
-        pointer-events: none;
+        pointer-events: none; /* Clicks pass through to button layer */
         font-family: "Source Sans Pro", sans-serif;
     }
     
-    .tr-date { width: 20%; font-size: 0.85rem; color: #111; font-weight: 700; }
+    .tr-date { width: 20%; font-size: 0.85rem; color: #000; font-weight: 800; }
     .tr-cat { width: 50%; font-size: 0.95rem; color: #222; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
+    .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 900; text-align: right; }
     
-    /* 2. CLICK LAYER (Button Overlay) */
+    /* 2. CLICK LAYER (Invisible Button) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -70,7 +70,7 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Static Header */
+    /* Header Styling for Ledger */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -82,11 +82,17 @@ st.markdown("""
         text-transform: uppercase;
     }
 
-    /* Style for non-history buttons */
-    .stButton>button { border-radius: 12px; }
+    /* Style for category popover spacing */
+    div[data-testid="stPopover"] { width: 100%; }
     
-    /* Compact popover checkbox spacing */
-    div[data-testid="stCheckbox"] { margin-bottom: -15px; }
+    /* Spacing between checkboxes in popover */
+    div[data-testid="stCheckbox"] { 
+        margin-bottom: 10px !important; 
+        padding: 5px 0;
+    }
+    
+    /* Button Radius for standard buttons */
+    .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -163,11 +169,8 @@ def get_icon(cat_name, row_type):
 def edit_dialog(row_index, row_data):
     st.write(f"Editing: **{row_data['Category']}**")
     e_date = st.date_input("Date", row_data["Date"])
-    
-    # Get categories by type for the dropdown
     cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
-    
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
@@ -191,7 +194,7 @@ def edit_dialog(row_index, row_data):
             time.sleep(0.5)
             st.rerun()
 
-# --- MAIN APP ---
+# --- APP ---
 st.title("📊 Petersen Budget")
 tab1, tab2, tab3 = st.tabs(["Add Entry", "Visuals", "History"])
 
@@ -236,46 +239,42 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
-        # 1. CALCULATE DEFAULT DATE RANGE (Full Current Month)
+        # Default Month Range
         today = date.today()
         first_day = today.replace(day=1)
-        last_day_num = calendar.monthrange(today.year, today.month)[1]
-        last_day = today.replace(day=last_day_num)
+        last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
-        # 2. FILTER UI
-        with st.expander("🔍 Filter View"):
-            # Date Selection
-            c_date1, c_date2 = st.columns(2)
-            with c_date1:
+        with st.expander("🔍 Filter History", expanded=False):
+            # Compact Date Selection (using [1, 1, 1] to make boxes small)
+            dc1, dc2, dc3 = st.columns([1, 1, 0.5])
+            with dc1:
                 start_f = st.date_input("From", first_day)
-            with c_date2:
+            with dc2:
                 end_f = st.date_input("To", last_day)
             
-            # Category Selection via Popover (Checkboxes grouped by Type)
-            with st.popover("Select Categories"):
-                st.markdown("**Income Categories**")
+            # Popover for Categories with improved spacing
+            with st.popover("Filter Categories"):
+                st.write("---")
+                st.markdown("**Income**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
-                sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"filter_inc_{cat}")]
+                sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
                 
-                st.divider()
-                st.markdown("**Expense Categories**")
+                st.write("---")
+                st.markdown("**Expenses**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
-                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"filter_exp_{cat}")]
+                sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
                 
                 all_selected = sel_inc + sel_exp
 
-            # Filter the dataframe
             work_df = df_t.copy()
             work_df = work_df[
                 (work_df["Date"].dt.date >= start_f) & 
                 (work_df["Date"].dt.date <= end_f) & 
                 (work_df["Category"].isin(all_selected))
             ]
-            
             f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.markdown(f"**Filtered Net:** `${f_net:,.2f}`")
+            st.caption(f"Showing {len(work_df)} transactions | Net: **${f_net:,.2f}**")
 
-        # 3. RENDER LEDGER
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
@@ -300,7 +299,7 @@ with tab3:
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.info("History is empty.")
+        st.info("No data yet.")
 
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
@@ -312,10 +311,10 @@ with st.sidebar:
         st.session_state["authenticated"] = False
         st.rerun()
     st.divider()
-    st.header("Categories")
+    st.header("Manage Categories")
     with st.form("cat_form", clear_on_submit=True):
         ct = st.selectbox("Type", ["Expense", "Income"])
-        cn = st.text_input("Name")
+        cn = st.text_input("New Category Name")
         if st.form_submit_button("Add Category"):
             if cn:
                 st.cache_resource.clear()
