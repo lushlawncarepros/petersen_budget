@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: High-Contrast Layout with Fixed Filter Spacing
+# CSS: High-Contrast Layout with Fixed Filter & Ledger Spacing
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -22,7 +22,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 60px; 
-        margin-bottom: 0px;
+        margin-bottom: 2px; /* Restored to "Nailed It" spacing */
         width: 100%;
         background-color: white; 
     }
@@ -33,8 +33,8 @@ st.markdown("""
         align-items: center; 
         justify-content: space-between;
         background-color: white;
-        border-bottom: 1px solid #e0e0e0;
-        padding: 0 10px;
+        border-bottom: 1px solid #f0f0f0;
+        padding: 0 12px;
         height: 60px;
         width: 100%;
         position: absolute;
@@ -43,7 +43,6 @@ st.markdown("""
         z-index: 1;
         pointer-events: none;
         font-family: "Source Sans Pro", sans-serif;
-        line-height: normal;
     }
     
     .tr-date { width: 20%; font-size: 0.85rem; color: #111; font-weight: 700; }
@@ -82,9 +81,10 @@ st.markdown("""
         font-size: 0.75rem;
         font-weight: 800;
         text-transform: uppercase;
+        background-color: white;
     }
 
-    /* --- FILTER UI SPACING FIXES --- */
+    /* --- FILTER UI SPACING --- */
     
     /* Spacing for the Filter Categories Button */
     div[data-testid="stPopover"] { 
@@ -92,7 +92,7 @@ st.markdown("""
         margin-top: 25px !important; /* Pushes it down from the dates */
     }
     
-    /* Spacing for checkboxes inside the popover (fix overlap from screenshot) */
+    /* Spacing for checkboxes inside the popover */
     div[data-testid="stCheckbox"] { 
         margin-bottom: 12px !important; 
         padding-top: 5px !important;
@@ -125,7 +125,7 @@ if not st.session_state["authenticated"]:
             st.rerun()
     st.stop()
 
-# --- DATA ---
+# --- DATA ENGINE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def safe_float(val):
@@ -236,8 +236,7 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else:
-        st.info("No data yet.")
+    else: st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -245,7 +244,7 @@ with tab3:
         first_day = today.replace(day=1)
         last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
-        with st.expander("🔍 Filter View"):
+        with st.expander("🔍 Filter History", expanded=False):
             c1, c2 = st.columns(2)
             with c1:
                 start_f = st.date_input("From", first_day)
@@ -277,7 +276,7 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">PRICE</div></div>', unsafe_allow_html=True)
         
-        # Wrapped in a container for background consistency
+        # Wrapped in a white container to ensure background doesn't peek through the 2px margins
         st.markdown('<div style="background-color:white; width:100%;">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
@@ -300,8 +299,7 @@ with tab3:
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.info("History is empty.")
+    else: st.info("No data yet.")
 
 with st.sidebar:
     st.title(f"Hi, {st.session_state['user']}!")
