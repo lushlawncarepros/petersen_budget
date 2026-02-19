@@ -28,7 +28,7 @@ st.markdown("""
     .row-container {
         position: relative; 
         height: 45px; 
-        margin-bottom: 8px; 
+        margin-bottom: 8px; /* Gap between rows (margin-bottom) */
         width: 100%;
         background-color: transparent; 
     }
@@ -45,8 +45,7 @@ st.markdown("""
         height: 40px; /* Total Height: 40px */
         width: 100%;
         position: absolute;
-        /* Centered vertically within 45px container: (45 - 40) / 2 = 2.5px */
-        top: 2.5px; 
+        top: 0; /* Vertical Offset (top): 0 */
         left: 0;
         z-index: 1;
         pointer-events: none;
