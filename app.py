@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Ultra-Compact 25px Row Height for S25 Mobile
+# CSS: Compact 30px Row Height for S25 Mobile
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
@@ -26,25 +26,25 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
-    /* 3. THE ROW CONTAINER (Strict 25px height) */
+    /* 3. THE ROW CONTAINER (Strict 30px height) */
     .row-container {
         position: relative; 
-        height: 25px; 
+        height: 30px; 
         margin-bottom: 2px; /* The 2px gap you requested */
         width: 100%;
         background-color: var(--secondary-background-color); 
-        border-radius: 3px;
+        border-radius: 4px;
         overflow: hidden;
     }
     
-    /* VISUAL LAYER (Text) - Perfectly centered in the 25px height */
+    /* VISUAL LAYER (Text) - Perfectly centered in the 30px height */
     .trans-row {
         display: flex;
         align-items: center; 
         justify-content: space-between;
         background-color: transparent;
         padding: 0 10px; 
-        height: 25px;
+        height: 30px;
         width: 100%;
         position: absolute;
         top: 0;
@@ -54,17 +54,17 @@ st.markdown("""
         font-family: "Source Sans Pro", sans-serif;
     }
     
-    .tr-date { width: 18%; font-size: 0.75rem; font-weight: 700; opacity: 0.8; }
-    .tr-cat { width: 52%; font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tr-amt { width: 30%; font-size: 0.85rem; font-weight: 800; text-align: right; }
+    .tr-date { width: 18%; font-size: 0.8rem; font-weight: 700; opacity: 0.8; }
+    .tr-cat { width: 52%; font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tr-amt { width: 30%; font-size: 0.9rem; font-weight: 800; text-align: right; }
     
-    /* CLICK LAYER (Invisible Button Overlay) - Matched to 25px */
+    /* CLICK LAYER (Invisible Button Overlay) - Matched to 30px */
     .row-container .stButton {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
-        height: 25px;
+        height: 30px;
         z-index: 5;
     }
     
@@ -75,7 +75,7 @@ st.markdown("""
         box-shadow: none !important;
         outline: none !important;
         width: 100% !important;
-        height: 25px !important;
+        height: 30px !important;
         padding: 0 !important;
         margin: 0 !important;
         display: block !important;
@@ -86,13 +86,13 @@ st.markdown("""
         background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* Ledger Header Labels (Proportional to 25px rows) */
+    /* Ledger Header Labels (Proportional to 30px rows) */
     .hist-header {
         display: flex;
         justify-content: space-between;
-        padding: 4px 10px;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.3); 
-        font-size: 0.85rem; 
+        padding: 6px 10px;
+        border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
+        font-size: 0.9rem; 
         font-weight: 800;
         text-transform: uppercase;
         margin-bottom: 4px;
