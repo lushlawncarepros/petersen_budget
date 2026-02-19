@@ -158,18 +158,19 @@ def load_data_clean():
         c_df = conn.read(worksheet="categories", ttl=0)
         if t_df is not None and not t_df.empty:
             t_df.columns = [str(c).strip().title() for c in t_df.columns]
-            for col in ["Date", "Type", "Category", "Amount", "User"]:
+            # Ensure all required columns exist, including the new 'Memo'
+            for col in ["Date", "Type", "Category", "Amount", "User", "Memo"]:
                 if col not in t_df.columns: t_df[col] = ""
             t_df["Amount"] = t_df["Amount"].apply(safe_float)
             t_df['Date'] = pd.to_datetime(t_df['Date'], errors='coerce')
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
-        else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"])
+        else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"])
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
         else:
             c_df = pd.DataFrame(columns=["Type", "Name"])
         return t_df, c_df
-    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User"]), pd.DataFrame(columns=["Type", "Name"])
+    except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name"])
 
 df_t, df_c = load_data_clean()
 
@@ -184,7 +185,6 @@ def get_icon(cat_name, row_type):
 
 @st.dialog("Manage Entry")
 def edit_dialog(row_index, row_data):
-    # Hidden button to steal initial focus from the date input
     st.markdown('<div class="decoy-focus"><button nonce="focus-fix"></button></div>', unsafe_allow_html=True)
     st.write(f"Editing: **{row_data['Category']}**")
     
@@ -192,9 +192,13 @@ def edit_dialog(row_index, row_data):
     cat_list = sorted(df_c[df_c["Type"] == row_data["Type"]]["Name"].unique().tolist(), key=str.lower)
     c_idx = cat_list.index(row_data["Category"]) if row_data["Category"] in cat_list else 0
     e_cat = st.selectbox("Category", cat_list, index=c_idx)
+    
+    # Memo added to editing view
+    e_memo = st.text_input("Memo", value=str(row_data.get("Memo", "")))
+    
     e_amt = st.number_input("Amount ($)", value=float(row_data["Amount"]))
     
-    # 30px Buffer before action buttons
+    # 30px Buffer
     st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -203,6 +207,7 @@ def edit_dialog(row_index, row_data):
             df_t.at[row_index, "Date"] = pd.to_datetime(e_date)
             df_t.at[row_index, "Category"] = e_cat
             df_t.at[row_index, "Amount"] = e_amt
+            df_t.at[row_index, "Memo"] = e_memo
             df_t['Date'] = df_t['Date'].dt.strftime('%Y-%m-%d')
             conn.update(worksheet="transactions", data=df_t)
             st.success("Updated!")
@@ -229,10 +234,12 @@ with tab1:
         f_cats = sorted(df_c[df_c["Type"] == t_type]["Name"].unique().tolist(), key=str.lower)
         f_cat = st.selectbox("Category", f_cats if f_cats else ["(Add categories in sidebar)"])
         
-        # value=None allows typing to start in the "ones" place immediately
+        # New Memo field
+        f_memo = st.text_input("Memo", placeholder="Optional details (e.g. car savings)")
+        
         f_amt = st.number_input("Amount ($)", value=None, placeholder="0.00", step=0.01)
         
-        # 30px Buffer added here to match the manage entry popup
+        # 30px Buffer
         st.markdown('<div style="height: 30px;"></div>', unsafe_allow_html=True)
         
         if st.form_submit_button("Save"):
@@ -240,7 +247,8 @@ with tab1:
                 latest_t, _ = load_data_clean()
                 new_entry = pd.DataFrame([{
                     "Date": pd.to_datetime(f_date), "Type": t_type, "Category": f_cat,
-                    "Amount": float(f_amt), "User": st.session_state["user"]
+                    "Amount": float(f_amt), "User": st.session_state["user"],
+                    "Memo": f_memo
                 }])
                 updated = pd.concat([latest_t, new_entry], ignore_index=True)
                 updated['Date'] = updated['Date'].dt.strftime('%Y-%m-%d')
@@ -308,16 +316,14 @@ with tab3:
             prefix = "-" if is_ex else "+"
             
             st.markdown('<div class="row-container">', unsafe_allow_html=True)
-            # The visual text row
             st.markdown(f"""
                 <div class="trans-row">
                     <div class="tr-date"><span>{d_str}</span></div>
-                    <div class="tr-cat">{icon} {row['Category']}</div>
+                    <div class="tr-cat">{icon} {row['Category']} {f"({row['Memo']})" if str(row.get('Memo', '')) != 'nan' and str(row.get('Memo', '')) != '' else ''}</div>
                     <div class="tr-amt" style="color:{price_color};">{prefix}${amt_val:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
             
-            # The actual Streamlit button (made invisible by CSS)
             if st.button(" ", key=f"h_{i}", use_container_width=True):
                 edit_dialog(i, row)
             st.markdown('</div>', unsafe_allow_html=True)
