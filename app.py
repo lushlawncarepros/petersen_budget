@@ -9,44 +9,36 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Petersen Budget", page_icon="💰", layout="centered")
 
-# CSS: Seamlessly Stacked Transactions with Minimal Spacing
+# CSS: Aggressive Stacking for S25 Mobile
 st.markdown("""
     <style>
     /* Hide Sidebar Nav */
     div[data-testid="stSidebarNav"] { display: none; }
     
-    /* 1. AGGRESSIVE GAP REMOVAL */
-    /* This targets the invisible wrappers Streamlit puts around every button/text block */
+    /* 1. NUCLEAR GAP REMOVAL */
+    /* Target the main vertical block and every sub-div to kill Streamlit's auto-spacing */
     [data-testid="stVerticalBlock"] { gap: 0rem !important; }
-    [data-testid="stVerticalBlock"] > div { 
-        margin-top: 0px !important; 
-        margin-bottom: 0px !important; 
-        padding-top: 0px !important; 
-        padding-bottom: 0px !important; 
-    }
-    [data-testid="element-container"] {
-        margin-top: 0px !important;
-        margin-bottom: 0px !important;
-    }
+    [data-testid="stVerticalBlock"] > div { margin: 0 !important; padding: 0 !important; }
+    [data-testid="element-container"] { margin-top: 0px !important; margin-bottom: 0px !important; }
     
-    /* --- TAB STYLING --- */
+    /* 2. TAB STYLING: Bold and Sized (1.35rem) */
     button[data-baseweb="tab"] p {
         font-size: 1.35rem !important; 
         font-weight: 800 !important;
     }
     
-    /* THE ROW CONTAINER */
+    /* 3. THE ROW CONTAINER */
     .row-container {
         position: relative; 
         height: 48px; 
-        margin-bottom: 2px; /* This is the ONLY gap between buttons now */
+        margin-bottom: 2px; /* This is the ONLY gap between buttons */
         width: 100%;
         background-color: var(--secondary-background-color); 
         border-radius: 4px;
         overflow: hidden;
     }
     
-    /* 1. VISUAL LAYER (Text) */
+    /* VISUAL LAYER (Text) */
     .trans-row {
         display: flex;
         align-items: center; 
@@ -67,7 +59,7 @@ st.markdown("""
     .tr-cat { width: 50%; font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tr-amt { width: 30%; font-size: 1.05rem; font-weight: 800; text-align: right; }
     
-    /* 2. THE CLICK LAYER (Invisible Button Overlay) */
+    /* CLICK LAYER (Invisible Button Overlay) */
     .row-container .stButton {
         position: absolute;
         top: 0;
@@ -95,7 +87,7 @@ st.markdown("""
         background-color: rgba(128,128,128,0.1) !important;
     }
     
-    /* Ledger Header */
+    /* Ledger Header Labels (1.0rem) */
     .hist-header {
         display: flex;
         justify-content: space-between;
@@ -107,12 +99,8 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* --- FILTER UI SPACING --- */
-    div[data-testid="stPopover"] { 
-        width: 100%; 
-        margin-top: 10px !important; 
-    }
-    
+    /* General Cleanups */
+    div[data-testid="stPopover"] { width: 100%; margin-top: 10px !important; }
     .stButton>button { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -250,8 +238,7 @@ with tab2:
         with c2:
             di = df_t[df_t["Type"] == "Income"]
             if not di.empty: st.plotly_chart(px.pie(di, values="Amount", names="Category", title="Income"), use_container_width=True)
-    else:
-        st.info("No data yet.")
+    else: st.info("No data yet.")
 
 with tab3:
     if not df_t.empty:
@@ -271,13 +258,10 @@ with tab3:
                 st.markdown("**Income Categories**")
                 inc_list = sorted(df_c[df_c["Type"] == "Income"]["Name"].unique().tolist())
                 sel_inc = [cat for cat in inc_list if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
-                
                 st.divider()
-                
                 st.markdown("**Expense Categories**")
                 exp_list = sorted(df_c[df_c["Type"] == "Expense"]["Name"].unique().tolist())
                 sel_exp = [cat for cat in exp_list if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
-                
                 all_selected = sel_inc + sel_exp
 
             work_df = df_t.copy()
@@ -292,7 +276,7 @@ with tab3:
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         
-        # This div wrapper helps us target the spacing specifically for the history list
+        # history container to enforce zero gap
         st.markdown('<div class="history-list">', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
             if pd.isnull(row['Date']): continue
