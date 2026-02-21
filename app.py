@@ -160,7 +160,7 @@ def load_data_clean():
             t_df = t_df.dropna(subset=['Date']).reset_index(drop=True)
         else: t_df = pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"])
         
-        # Categories Clean (Now initializes 'Order' and 'Color')
+        # Categories Clean
         if c_df is not None and not c_df.empty:
             c_df.columns = [str(c).strip().title() for c in c_df.columns]
             for col in ["Type", "Name", "Order", "Color"]:
@@ -188,6 +188,9 @@ def load_data_clean():
     except: return pd.DataFrame(columns=["Date", "Type", "Category", "Amount", "User", "Memo"]), pd.DataFrame(columns=["Type", "Name", "Order", "Color"]), pd.DataFrame(columns=["Month", "Category", "Amount"])
 
 df_t, df_c, df_b = load_data_clean()
+
+# 🛡️ BUG FIX: Force 'Date' into datetime format globally to prevent the AttributeError
+df_t['Date'] = pd.to_datetime(df_t['Date'], errors='coerce')
 
 def get_icon(cat_name, row_type):
     n = str(cat_name).lower()
@@ -385,16 +388,17 @@ with tab_budget:
     month_num = months.index(selected_month) + 1
     month_str = f"{selected_year}-{month_num:02d}"
     
+    # Use the globally clean df_t
     t_month = df_t[(df_t['Date'].dt.year == selected_year) & (df_t['Date'].dt.month == month_num)]
     actuals = t_month.groupby('Category')['Amount'].sum().to_dict()
     
     b_month = df_b[df_b['Month'] == month_str] if not df_b.empty else pd.DataFrame(columns=["Month", "Category", "Amount"])
     
-    # 🌟 NEW LOGIC: BUDGET ROLLOVER
+    # BUDGET ROLLOVER
     if b_month.empty and not df_b.empty:
         valid_months = df_b['Month'].dropna().astype(str).tolist()
         if valid_months:
-            recent_month = max(valid_months)  # YYYY-MM format sorts chronologically natively
+            recent_month = max(valid_months)
             recent_b = df_b[df_b['Month'] == recent_month]
             planned = recent_b.set_index('Category')['Amount'].to_dict()
             st.info(f"💡 **New Month!** Pre-filled with budget data from **{recent_month}**. Click 'Save Budget Planner' below to lock it in.")
@@ -425,15 +429,12 @@ with tab_budget:
 
     all_budget_edits = []
     
-    # 🌟 NEW LOGIC: CONDITIONAL ROW COLORING
     def highlight_actual_diff(row):
         styles = [''] * len(row)
         try:
             diff = float(row['Diff'])
             color = ''
             
-            # Since Diff math handles Income vs Expense natively 
-            # (Positive Diff is always good, Negative Diff is always bad)
             if diff > 0: color = 'color: #2e7d32; font-weight: 600;' # Green
             elif diff < 0: color = 'color: #d32f2f; font-weight: 600;' # Red
             
@@ -447,13 +448,11 @@ with tab_budget:
     def render_budget_section(base_type, icon):
         st.markdown(f"### {icon} {base_type.upper()}")
         
-        # Pull ALL items for this section (Categories AND Headers)
         items = df_c[df_c["Type"].isin([base_type, f"{base_type} Header"])].sort_values(by=["Order", "Name"])
         
         current_cats = []
         editor_idx = 0
         
-        # Helper to flush collected categories into a data_editor before printing a header
         def flush_cats(idx):
             if current_cats:
                 data = []
@@ -466,8 +465,6 @@ with tab_budget:
                     data.append({"Order": o, "Category": c, "Planned": p, "Actual": a, "Diff": diff})
                 
                 df_to_edit = pd.DataFrame(data)
-                
-                # Apply Text Styling directly to the Dataframe rendering
                 styled_df = df_to_edit.style.apply(highlight_actual_diff, axis=1)
                 
                 ed = st.data_editor(styled_df, hide_index=True, column_config=col_config, use_container_width=True, key=f"ed_{base_type}_{idx}_{month_str}")
@@ -476,12 +473,10 @@ with tab_budget:
                 return idx + 1
             return idx
 
-        # Loop through items in order. Break tables apart when a heading is found.
         for _, item in items.iterrows():
             if item["Type"] == f"{base_type} Header":
-                editor_idx = flush_cats(editor_idx) # Render what we have so far
+                editor_idx = flush_cats(editor_idx)
                 
-                # Render the Custom Full-Row Heading!
                 st.markdown(f"""
                     <div style='background-color:{item['Color']}; color:#ffffff; text-align:center; 
                     padding:8px; border-radius:6px; font-weight:800; font-size:1.1rem; 
@@ -492,7 +487,7 @@ with tab_budget:
             else:
                 current_cats.append(item)
                 
-        flush_cats(editor_idx) # Render anything left over at the end
+        flush_cats(editor_idx)
         st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
 
     render_budget_section("Income", "💰")
@@ -523,7 +518,6 @@ with tab_budget:
         time.sleep(1)
         st.rerun()
 
-    # --- UI for Adding/Managing Custom Headings ---
     st.divider()
     st.markdown("### 🏷️ Manage Budget Headings")
     hc1, hc2 = st.columns(2)
@@ -603,25 +597,33 @@ with tab3:
         first_day = today.replace(day=1)
         last_day_num = calendar.monthrange(today.year, today.month)[1]
         last_day = today.replace(day=last_day_num)
+        
         with st.expander("🔍 Filter View"):
-            c1, c2 = st.columns(2)
-            with c1: start_f = st.date_input("From", first_day)
-            with c2: end_f = st.date_input("To", last_day)
-            with st.popover("Select Categories"):
-                st.markdown("**Income Categories**")
-                inc_df = df_c[df_c["Type"] == "Income"].sort_values(by=["Order", "Name"])
-                sel_inc = [cat for cat in inc_df["Name"] if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
+            # 🛡️ WRAP IN FORM TO PREVENT LAG
+            with st.form("history_filter_form"):
+                c1, c2 = st.columns(2)
+                with c1: start_f = st.date_input("From", first_day)
+                with c2: end_f = st.date_input("To", last_day)
                 
-                st.divider()
-                st.markdown("**Expense Categories**")
-                exp_df = df_c[df_c["Type"] == "Expense"].sort_values(by=["Order", "Name"])
-                sel_exp = [cat for cat in exp_df["Name"] if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
+                with st.popover("Select Categories"):
+                    st.markdown("**Income Categories**")
+                    inc_df = df_c[df_c["Type"] == "Income"].sort_values(by=["Order", "Name"])
+                    sel_inc = [cat for cat in inc_df["Name"] if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
+                    
+                    st.divider()
+                    st.markdown("**Expense Categories**")
+                    exp_df = df_c[df_c["Type"] == "Expense"].sort_values(by=["Order", "Name"])
+                    sel_exp = [cat for cat in exp_df["Name"] if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
+                
+                st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+                apply_filters = st.form_submit_button("✅ Apply Filters", use_container_width=True)
                 all_selected = sel_inc + sel_exp
                 
-            work_df = df_t.copy()
-            work_df = work_df[(work_df["Date"].dt.date >= start_f) & (work_df["Date"].dt.date <= end_f) & (work_df["Category"].isin(all_selected))]
-            f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
-            st.markdown(f"**Filtered Net:** `${f_net:,.0f}`")
+        work_df = df_t.copy()
+        work_df = work_df[(work_df["Date"].dt.date >= start_f) & (work_df["Date"].dt.date <= end_f) & (work_df["Category"].isin(all_selected))]
+        f_net = work_df[work_df["Type"] == "Income"]["Amount"].sum() - work_df[work_df["Type"] == "Expense"]["Amount"].sum()
+        st.markdown(f"**Filtered Net:** `${f_net:,.0f}`")
+        
         work_df = work_df.sort_values(by="Date", ascending=False)
         st.markdown('<div class="hist-header"><div style="width:20%">DATE</div><div style="width:50%">CATEGORY</div><div style="width:30%; text-align:right">AMOUNT</div></div>', unsafe_allow_html=True)
         for i, row in work_df.iterrows():
