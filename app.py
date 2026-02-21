@@ -189,7 +189,7 @@ def load_data_clean():
 
 df_t, df_c, df_b = load_data_clean()
 
-# 🛡️ BUG FIX: Force 'Date' into datetime format globally to prevent the AttributeError
+# Force 'Date' into datetime format globally
 df_t['Date'] = pd.to_datetime(df_t['Date'], errors='coerce')
 
 def get_icon(cat_name, row_type):
@@ -593,27 +593,38 @@ with tab2:
 
 with tab3:
     if not df_t.empty:
+        # 🌟 NEW LOGIC: Initialize session state for the checkboxes so they default to checked
+        for cat in df_c["Name"]:
+            if f"f_cb_{cat}" not in st.session_state:
+                st.session_state[f"f_cb_{cat}"] = True
+                
         today = date.today()
         first_day = today.replace(day=1)
         last_day_num = calendar.monthrange(today.year, today.month)[1]
         last_day = today.replace(day=last_day_num)
         
         with st.expander("🔍 Filter View"):
-            # 🛡️ WRAP IN FORM TO PREVENT LAG
             with st.form("history_filter_form"):
                 c1, c2 = st.columns(2)
                 with c1: start_f = st.date_input("From", first_day)
                 with c2: end_f = st.date_input("To", last_day)
                 
                 with st.popover("Select Categories"):
+                    # 🌟 NEW LOGIC: Select / Clear All Buttons mapped directly to session state
+                    sc1, sc2 = st.columns(2)
+                    if sc1.form_submit_button("☑️ Select All", use_container_width=True):
+                        for cat in df_c["Name"]: st.session_state[f"f_cb_{cat}"] = True
+                    if sc2.form_submit_button("☐ Clear All", use_container_width=True):
+                        for cat in df_c["Name"]: st.session_state[f"f_cb_{cat}"] = False
+                        
                     st.markdown("**Income Categories**")
                     inc_df = df_c[df_c["Type"] == "Income"].sort_values(by=["Order", "Name"])
-                    sel_inc = [cat for cat in inc_df["Name"] if st.checkbox(cat, value=True, key=f"f_inc_{cat}")]
+                    sel_inc = [cat for cat in inc_df["Name"] if st.checkbox(cat, key=f"f_cb_{cat}")]
                     
                     st.divider()
                     st.markdown("**Expense Categories**")
                     exp_df = df_c[df_c["Type"] == "Expense"].sort_values(by=["Order", "Name"])
-                    sel_exp = [cat for cat in exp_df["Name"] if st.checkbox(cat, value=True, key=f"f_exp_{cat}")]
+                    sel_exp = [cat for cat in exp_df["Name"] if st.checkbox(cat, key=f"f_cb_{cat}")]
                 
                 st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
                 apply_filters = st.form_submit_button("✅ Apply Filters", use_container_width=True)
